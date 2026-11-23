@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- SVG created with Arrow, by QuiverAI (https://quiver.ai) -->
+  <defs>
+    <linearGradient id="silver-base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e4e5e6"/>
+      <stop offset=".15" stop-color="#b2b3b7"/>
+      <stop offset=".31" stop-color="#d3d4d6"/>
+      <stop offset=".51" stop-color="#a4a5aa"/>
+      <stop offset=".73" stop-color="#dedfe0"/>
+      <stop offset="1" stop-color="#999ba1"/>
+    </linearGradient>
+    <linearGradient id="silver-vertical" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#b8b9bd"/>
+      <stop offset=".13" stop-color="#babbbf"/>
+      <stop offset=".29" stop-color="#e0e0e2"/>
+      <stop offset=".4" stop-color="#bcbec2"/>
+      <stop offset=".52" stop-color="#e2e3e4"/>
+      <stop offset=".62" stop-color="#bdbfc3"/>
+      <stop offset=".75" stop-color="#d0d1d3"/>
+      <stop offset=".9" stop-color="#b8b9be"/>
+      <stop offset="1" stop-color="#d4d5d8"/>
+    </linearGradient>
+    <linearGradient id="rim-edge" x1="0" y1="0" x2=".2" y2="1">
+      <stop stop-color="#f9faf9"/>
+      <stop offset=".2" stop-color="#d7d8da"/>
+      <stop offset=".55" stop-color="#7e8087"/>
+      <stop offset=".85" stop-color="#f4f4f3"/>
+      <stop offset="1" stop-color="#777a81"/>
+    </linearGradient>
+    <linearGradient id="inner-edge" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#767b88"/>
+      <stop offset=".18" stop-color="#989ba3"/>
+      <stop offset=".55" stop-color="#bec0c5"/>
+      <stop offset=".83" stop-color="#d6d7d9"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <radialGradient id="corner-shine">
+      <stop stop-color="#ffffff" stop-opacity=".95"/>
+      <stop offset=".35" stop-color="#ffffff" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="screen-color" cx=".49" cy=".53" r=".73">
+      <stop stop-color="#06001d"/>
+      <stop offset=".72" stop-color="#03001c"/>
+      <stop offset="1" stop-color="#020015"/>
+    </radialGradient>
+    <linearGradient id="glass-reflection" x1=".4" y1="0" x2=".52" y2="1">
+      <stop stop-color="#3d376e"/>
+      <stop offset=".38" stop-color="#242048" stop-opacity=".88"/>
+      <stop offset="1" stop-color="#15102f" stop-opacity=".2"/>
+    </linearGradient>
+    <linearGradient id="wax-light" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f2d4ff"/>
+      <stop offset=".44" stop-color="#e3b8ff"/>
+      <stop offset=".77" stop-color="#e8c1ff"/>
+      <stop offset="1" stop-color="#ecd0ff"/>
+    </linearGradient>
+    <linearGradient id="flame-color" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#ffb800"/>
+      <stop offset=".52" stop-color="#ffc600"/>
+      <stop offset="1" stop-color="#ffb600"/>
+    </linearGradient>
+    <radialGradient id="amber-aura">
+      <stop stop-color="#ff9c00" stop-opacity=".46"/>
+      <stop offset=".35" stop-color="#e47a00" stop-opacity=".22"/>
+      <stop offset=".68" stop-color="#a85107" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#a55007" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="violet-wide" x="-50%" y="-45%" width="200%" height="190%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+    <filter id="violet-near" x="-30%" y="-25%" width="160%" height="150%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="gold-glow" x="-160%" y="-70%" width="420%" height="240%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="spark-glow" x="-140%" y="-140%" width="380%" height="380%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <clipPath id="bezel-clip">
+      <path d="M252 7H773C908 7 1016 110 1016 248V766C1016 902 910 1008 774 1008H249C113 1008 7 903 7 766V250C7 113 114 7 252 7ZM263 54C146 54 54 145 54 263V746C54 866 145 960 264 960H756C876 960 970 869 970 749V265C970 147 879 54 759 54Z" clip-rule="evenodd"/>
+    </clipPath>
+    <path id="candle-outline" d="M460 450C405 455 368 468 368 480C368 500 452 522 551 514C557 513 560 518 560 524V560C560 574 569 584 583 584C596 584 606 574 606 560V520C606 509 613 505 625 500C642 492 653 486 653 479C653 466 614 454 560 450M368 481V770C368 786 379 798 395 798H625C641 798 653 786 653 770V480"/>
+  </defs>
+  <g id="metallic-rounded-frame">
+    <path d="M252 7H773C908 7 1016 110 1016 248V766C1016 902 910 1008 774 1008H249C113 1008 7 903 7 766V250C7 113 114 7 252 7Z" fill="url(#silver-base)" stroke="url(#rim-edge)" stroke-width="3"/>
+    <g clip-path="url(#bezel-clip)">
+      <rect x="8" y="7" width="1008" height="1001" fill="url(#silver-vertical)" opacity=".57"/>
+      <ellipse cx="95" cy="96" rx="132" ry="92" transform="rotate(-42 95 96)" fill="url(#corner-shine)"/>
+      <ellipse cx="926" cy="98" rx="110" ry="74" transform="rotate(43 926 98)" fill="url(#corner-shine)"/>
+      <ellipse cx="103" cy="917" rx="117" ry="68" transform="rotate(43 103 917)" fill="url(#corner-shine)"/>
+      <ellipse cx="918" cy="916" rx="117" ry="74" transform="rotate(-45 918 916)" fill="url(#corner-shine)"/>
+      <ellipse cx="654" cy="27" rx="97" ry="83" fill="url(#corner-shine)" opacity=".63"/>
+      <ellipse cx="519" cy="984" rx="78" ry="90" fill="url(#corner-shine)" opacity=".55"/>
+    </g>
+    <path d="M252 17H774C902 17 1006 119 1006 249V766C1006 895 904 999 773 999H250C121 999 18 896 18 766V251C18 121 122 17 252 17Z" fill="none" stroke="#f6f6f6" stroke-opacity=".32" stroke-width="2"/>
+    <path d="M263 52H759C878 52 972 145 972 265V749C972 869 877 962 756 962H264C144 962 52 867 52 746V263C52 144 145 52 263 52Z" fill="#4e515c" stroke="url(#inner-edge)" stroke-width="3"/>
+  </g>
+  <g id="dark-glass-face">
+    <path d="M263 58H758C874 58 965 149 965 265V747C965 865 874 954 756 954H265C148 954 59 864 59 746V264C59 149 148 58 263 58Z" fill="url(#screen-color)" stroke="#080b1b" stroke-width="2"/>
+    <path d="M88 216C97 139 162 79 257 78H761C840 78 896 116 922 174C893 207 751 236 611 248C423 265 184 254 112 233C94 228 87 224 88 216Z" fill="url(#glass-reflection)"/>
+  </g>
+  <g id="candle-light-halos">
+    <ellipse cx="510" cy="382" rx="171" ry="178" fill="url(#amber-aura)"/>
+    <use href="#candle-outline" fill="none" stroke="#852cff" stroke-width="23" opacity=".47" filter="url(#violet-wide)"/>
+    <use href="#candle-outline" fill="none" stroke="#a24aff" stroke-width="20" opacity=".46" filter="url(#violet-near)"/>
+    <rect x="487" y="325" width="47" height="125" fill="#ff9900" opacity=".84" filter="url(#gold-glow)"/>
+  </g>
+  <g id="rising-luminous-squares">
+    <g fill="#a655ff" opacity=".65" filter="url(#spark-glow)">
+      <rect x="567" y="194" width="17" height="17"/>
+      <rect x="547" y="228" width="16" height="16"/>
+      <rect x="517" y="254" width="16" height="17"/>
+      <rect x="494" y="288" width="16" height="17"/>
+    </g>
+    <g fill="#eed8ff" stroke="#b974ed" stroke-width="1.4">
+      <rect x="567.5" y="194" width="15.5" height="16"/>
+      <rect x="547" y="228" width="15.5" height="15.5"/>
+      <rect x="517.5" y="254.5" width="15" height="16"/>
+      <rect x="494.5" y="288" width="15" height="16"/>
+    </g>
+    <g fill="#f6e8ff" opacity=".55">
+      <rect x="569" y="196" width="12" height="12"/>
+      <rect x="549" y="230" width="11" height="11"/>
+      <rect x="519" y="256" width="11" height="12"/>
+      <rect x="496" y="290" width="11" height="12"/>
+    </g>
+  </g>
+  <g id="golden-rectangular-flame">
+    <rect x="486.5" y="325" width="47.5" height="125" fill="#fca600" opacity=".7" filter="url(#violet-near)"/>
+    <rect x="487" y="325.5" width="46.5" height="124" fill="url(#flame-color)"/>
+    <path d="M488 326H532.5V449" fill="none" stroke="#ffd22d" stroke-opacity=".35" stroke-width="1"/>
+  </g>
+  <g id="neon-candle-and-dripping-wax" fill="none">
+    <use href="#candle-outline" stroke="#c287fc" stroke-width="18" stroke-linejoin="round"/>
+    <use href="#candle-outline" stroke="url(#wax-light)" stroke-width="15" stroke-linejoin="round"/>
+    <use href="#candle-outline" stroke="#f4deff" stroke-width="11" stroke-linejoin="round" opacity=".22"/>
+  </g>
+</svg>
