@@ -6,14 +6,16 @@ import SeanceCore
 final class TerminalView: NSView, @preconcurrency NSTextInputClient {
     let runtime: GhosttyRuntime
     let id: TabID
+    let closesOnShellExit: Bool
     private(set) var surface: ghostty_surface_t?
     private var marked = ""
     private var input: [String]?
     private var mouseTracking: NSTrackingArea?
 
-    init(runtime: GhosttyRuntime, tab: Tab, executable: String?, arguments: [String]) throws {
+    init(runtime: GhosttyRuntime, tab: Tab, resuming: Bool) throws {
         self.runtime = runtime
         id = tab.id
+        closesOnShellExit = resuming && !runtime.waitAfterCommand
         super.init(frame: NSRect(x: 0, y: 0, width: 640, height: 480))
         guard let app = runtime.app else { throw TerminalError.initialization }
         let pointer = Unmanaged.passUnretained(self).toOpaque()
@@ -35,8 +37,17 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
             ghostty_env_var_s(key: try copy(key), value: try copy(value))
         }
         config.working_directory = try copy(tab.directory.path)
-        if let executable {
-            config.command = try copy(Self.launchCommand(executable: executable, arguments: arguments))
+        if resuming {
+            // Ghostty's configured command can be a TUI or SSH connection. Send
+            // startup input only to a local interactive shell that understands it.
+            let accountShell = getpwuid(getuid()).map { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
+            let supported = ["sh", "bash", "zsh", "ksh", "fish"]
+            let shell = supported.contains(URL(fileURLWithPath: accountShell).lastPathComponent) ? accountShell : "/bin/zsh"
+            let safeCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./+-")
+            let command = shell.rangeOfCharacter(from: safeCharacters.inverted) == nil
+                ? shell : "'" + shell.replacingOccurrences(of: "'", with: "'\\''") + "'"
+            config.command = try copy(command)
+            config.initial_input = try copy("\"$SEANCE_HELPER\" run-resume\n")
         }
         surface = variables.withUnsafeMutableBufferPointer {
             config.env_vars = $0.baseAddress
@@ -48,23 +59,6 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
     }
 
     required init?(coder: NSCoder) { nil }
-
-    /// libghostty 1.2.3 wraps this string in a shell command. A login shell supplies
-    /// the same PATH its interactive sessions use. Pass agent arguments positionally.
-    private static func launchCommand(executable: String, arguments: [String]) -> String {
-        let shell = getpwuid(getuid()).map { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
-        let name = URL(fileURLWithPath: shell).lastPathComponent
-        let command: [String]
-        if name == "fish" {
-            command = [shell, "-lic", "exec $argv", "--"]
-        } else {
-            let loginShell = ["zsh", "bash", "sh", "ksh"].contains(name) ? shell : "/bin/zsh"
-            command = [loginShell, "-lic", "exec \"$@\"", "seance"]
-        }
-        return (command + [executable] + arguments)
-            .map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-            .joined(separator: " ")
-    }
 
     static func from(_ pointer: UnsafeMutableRawPointer?) -> TerminalView? {
         pointer.map { Unmanaged<TerminalView>.fromOpaque($0).takeUnretainedValue() }

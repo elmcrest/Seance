@@ -9,6 +9,7 @@ final class GhosttyRuntime {
     let environment: [String: String]
     let pasteboard: NSPasteboard
     private(set) var app: ghostty_app_t?
+    private(set) var waitAfterCommand = false
     private var config: ghostty_config_t?
     var newTab: () -> Void = {}
     var closeTab: (TabID) -> Void = { _ in }
@@ -27,6 +28,7 @@ final class GhosttyRuntime {
         ghostty_config_load_default_files(config)
         ghostty_config_load_recursive_files(config)
         ghostty_config_finalize(config)
+        _ = ghostty_config_get(config, &waitAfterCommand, "wait-after-command", UInt("wait-after-command".utf8.count))
 
         var runtime = ghostty_runtime_config_s()
         runtime.userdata = Unmanaged.passUnretained(self).toOpaque()
@@ -128,7 +130,15 @@ final class GhosttyRuntime {
             guard store.tabs.indices.contains(offset) else { return false }
             try? store.select(store.tabs[offset].id)
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
-            if let id = view?.id { childExited(id) }
+            if let view {
+                childExited(view.id)
+                // The embedding API forces wait-after-command for a surface
+                // command. Honor the user's normal behavior when its shell exits.
+                if view.closesOnShellExit {
+                    DispatchQueue.main.async { self.closeTab(view.id) }
+                    return true
+                }
+            }
             // Ghostty still renders the exit status when the tab stays open.
             return false
         case GHOSTTY_ACTION_RING_BELL: NSSound.beep()

@@ -10,6 +10,8 @@ public final class TabMCPServer {
     private let store: TabStore
     private let privateDirectory: URL?
     private var listener: DispatchSourceRead?
+    private var pendingResumes: [TabID: (SessionLaunch, @MainActor () -> Void)] = [:]
+    private var resumeProcesses: [TabID: DispatchSourceProcess] = [:]
     private var clients: Set<Int32> = []
 
     public init(store: TabStore, socketPath: String? = ProcessInfo.processInfo.environment["SEANCE_LISTEN_SOCKET_PATH"]) throws {
@@ -23,6 +25,29 @@ public final class TabMCPServer {
             self.privateDirectory = directory
             self.socketPath = directory.appendingPathComponent("mcp.sock").path
         }
+    }
+
+    public func prepareResume(_ launch: SessionLaunch, in tab: TabID, onExit: @escaping @MainActor () -> Void) {
+        pendingResumes[tab] = (launch, onExit)
+    }
+
+    public func forgetResume(in tab: TabID) {
+        pendingResumes.removeValue(forKey: tab)
+        resumeProcesses.removeValue(forKey: tab)?.cancel()
+    }
+
+    private func beginResume(in tab: TabID, pid: pid_t) -> Data {
+        guard let (launch, onExit) = pendingResumes.removeValue(forKey: tab) else { return Data() }
+        // The bridge execs the agent in place. Observe its PID independently of
+        // agent hooks so launch errors and signal exits also free the session.
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
+        source.setEventHandler { [weak self] in
+            self?.forgetResume(in: tab)
+            onExit()
+        }
+        resumeProcesses[tab] = source
+        source.resume()
+        return (try? JSONEncoder().encode([launch.executable] + launch.arguments)) ?? Data()
     }
 
     public func start() throws {
@@ -53,6 +78,9 @@ public final class TabMCPServer {
     public func stop() {
         guard let listener else { return }
         self.listener = nil
+        pendingResumes.removeAll()
+        for process in resumeProcesses.values { process.cancel() }
+        resumeProcesses.removeAll()
         listener.cancel()
         unlink(socketPath)
         if let privateDirectory { rmdir(privateDirectory.path) }
@@ -88,6 +116,15 @@ public final class TabMCPServer {
         var input = LineReader(fd)
         do {
             guard let header = try input.next() else { return }
+            if header == Data(LocalSocket.resumeHeader.utf8) {
+                guard let line = try input.next(), let id = UUID(uuidString: String(decoding: line, as: UTF8.self)) else { return }
+                var pid: pid_t = 0
+                var size = socklen_t(MemoryLayout.size(ofValue: pid))
+                guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0, pid > 0 else { return }
+                let reply = DispatchQueue.main.sync { beginResume(in: TabID(id), pid: pid) }
+                try writeLine(reply, to: fd)
+                return
+            }
             if header == Data(ClaudeHook.header.utf8) {
                 guard let payload = try input.next() else { return }
                 let event = try JSONDecoder().decode(ClaudeHook.self, from: payload)

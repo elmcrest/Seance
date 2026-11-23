@@ -14,6 +14,8 @@ private func posixError() -> POSIXError {
 }
 
 package enum LocalSocket {
+    package static let resumeHeader = "seance-resume-v1"
+
     package static func open(path: String, listening: Bool) throws -> Int32 {
         var address = sockaddr_un()
         let bytes = Array(path.utf8) + [0]

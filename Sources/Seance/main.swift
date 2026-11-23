@@ -71,17 +71,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @discardableResult
     func openTerminal(
-        directory: URL, executable: String? = nil, arguments: [String] = [],
-        resuming session: SessionKey? = nil
+        directory: URL, resume: (session: SessionKey, launch: SessionLaunch)? = nil
     ) throws -> TabID {
         guard let runtime else { throw TerminalError.initialization }
         let previous = store.selectedID
         let id = store.open(directory: directory)
         do {
-            if let session, !attachments.reserve(session, for: id) {
-                throw SessionLaunchError.alreadyAttached
+            if let resume {
+                guard let server else { throw TerminalError.initialization }
+                guard attachments.reserve(resume.session, for: id) else { throw SessionLaunchError.alreadyAttached }
+                server.prepareResume(resume.launch, in: id) { [attachments] in
+                    attachments.detach(resume.session, from: id)
+                }
             }
-            let view = try TerminalView(runtime: runtime, tab: store.tab(id), executable: executable, arguments: arguments)
+            let view = try TerminalView(runtime: runtime, tab: store.tab(id), resuming: resume != nil)
             view.frame = terminalContainer.bounds
             view.autoresizingMask = [.width, .height]
             surfaces[id] = view
@@ -89,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             focus(id)
             return id
         } catch {
+            server?.forgetResume(in: id)
             attachments.close(id)
             try? store.close(id)
             if let previous { try? store.select(previous) }
@@ -102,8 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self?.newShell()
         }, resume: { [weak self] session, launch in
             do {
-                try self?.openTerminal(directory: launch.directory, executable: launch.executable,
-                                       arguments: launch.arguments, resuming: session.id)
+                try self?.openTerminal(directory: launch.directory, resume: (session.id, launch))
             } catch {
                 NSAlert(error: error).runModal()
             }
@@ -122,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func closeTab(_ id: TabID) {
         guard let view = surfaces.removeValue(forKey: id) else { return }
+        server?.forgetResume(in: id)
         attachments.close(id)
         try? store.close(id)
         view.removeFromSuperview()

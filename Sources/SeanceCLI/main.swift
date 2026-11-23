@@ -52,6 +52,7 @@ private func setup(_ client: String) throws {
 do {
     switch Array(CommandLine.arguments.dropFirst()) {
     case ["claude-hook"]: try relayClaudeHook()
+    case ["run-resume"]: try runResume()
     case ["mcp"]: try relay()
     case ["setup", "claude"]: try setup("claude")
     case ["setup", "codex"]: try setup("codex")

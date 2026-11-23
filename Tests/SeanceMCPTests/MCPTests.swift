@@ -117,3 +117,43 @@ private final class TestBundleAnchor: NSObject {}
     }
     #expect(try store.tab(selected).titleOverride == nil)
 }
+
+@MainActor
+@Test(arguments: [true, false])
+func resumeReleasesSessionWithoutClosingTab(agentInstalled: Bool) async throws {
+    let store = TabStore()
+    let directory = FileManager.default.temporaryDirectory
+    let tab = store.open(directory: directory)
+    let server = try TabMCPServer(store: store, socketPath: nil)
+    try server.start()
+    defer { server.stop() }
+
+    let literal = "a quote ' and a space; $HOME"
+    let launch = SessionLaunch(executable: agentInstalled ? "/usr/bin/printf" : "/nonexistent/seance-test-agent",
+                               arguments: ["%s", literal], directory: directory)
+    var finished = false
+    server.prepareResume(launch, in: tab) { finished = true }
+
+    let helper = Bundle(for: TestBundleAnchor.self).bundleURL.deletingLastPathComponent()
+        .appendingPathComponent("SeanceCLI")
+    let environment = ["TAB_ID": tab.rawValue.uuidString, "SEANCE_SOCKET_PATH": server.socketPath]
+    let (status, output) = try await Task.detached {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = helper
+        process.arguments = ["run-resume"]
+        process.environment = environment
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        let text = try pipe.fileHandleForReading.readToEnd() ?? Data()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: text, as: UTF8.self))
+    }.value
+    #expect(status == (agentInstalled ? 0 : 1))
+    if agentInstalled { #expect(output == literal) }
+    let deadline = ContinuousClock.now + .seconds(2)
+    while !finished && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(finished)
+    #expect(store.selectedID == tab)
+}

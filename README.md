@@ -20,7 +20,7 @@ The development bundle and build products live under this worktree’s .build di
 
 ## Tabs and sessions
 
-Press **⌘T** and Return to open a terminal in the current tab’s last reported directory. Type to search saved Claude sessions, then choose one to run `claude --resume` in its directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Conversation previews use bounded reads from the beginning and end of transcripts.
+Press **⌘T** and Return to open a terminal in the current tab’s last reported directory. Type to search saved Claude sessions, then choose one to run `claude --resume` in its directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Conversation previews use bounded reads from the beginning and end of transcripts.
 
 Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
 
