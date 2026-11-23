@@ -1,0 +1,66 @@
+import Darwin
+import Foundation
+import SeanceIPC
+
+private struct ClaudeHookInput: Decodable {
+    let hook_event_name: ClaudeHookKind
+    let session_id: UUID
+}
+
+func relayClaudeHook() throws {
+    let env = ProcessInfo.processInfo.environment
+    guard let path = env["SEANCE_SOCKET_PATH"],
+          let tabID = env["TAB_ID"].flatMap(UUID.init(uuidString:)) else { return }
+    let input = FileHandle.standardInput.readDataToEndOfFile()
+    let event = try JSONDecoder().decode(ClaudeHookInput.self, from: input)
+    let payload = ClaudeHook(kind: event.hook_event_name, sessionID: event.session_id, tabID: tabID)
+    let fd = try LocalSocket.open(path: path, listening: false)
+    defer { Darwin.close(fd) }
+    try writeLine(Data(ClaudeHook.header.utf8), to: fd)
+    try writeLine(JSONEncoder().encode(payload), to: fd)
+    var reader = LineReader(fd)
+    guard try reader.next() == Data("ok".utf8) else {
+        throw IPCError.message("Seance could not apply the Claude session hook")
+    }
+}
+
+/// Keep the command identical when the app moves. Each surface supplies the current helper path.
+func installClaudeHooks() throws {
+    let env = ProcessInfo.processInfo.environment
+    let root = env["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let file = root.appendingPathComponent("settings.json").resolvingSymlinksInPath()
+    var settings: [String: Any] = [:]
+    if FileManager.default.fileExists(atPath: file.path) {
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any] else {
+            throw IPCError.message("Expected an object in Claude settings at " + file.path)
+        }
+        settings = object
+    }
+    let command = #"/bin/sh -c 'if [ -n "$SEANCE_SOCKET_PATH" ] && [ -x "$SEANCE_HELPER" ]; then exec "$SEANCE_HELPER" claude-hook; fi'"#
+    guard var hooks = (settings["hooks"] ?? [:]) as? [String: Any] else {
+        throw IPCError.message("Expected an object in Claude settings.hooks")
+    }
+    var changed = false
+    for kind in [ClaudeHookKind.start, .end] {
+        guard var groups = (hooks[kind.rawValue] ?? []) as? [[String: Any]] else {
+            throw IPCError.message("Expected an array in Claude hooks." + kind.rawValue)
+        }
+        let registered = groups.contains { group in
+            let handlers = group["hooks"] as? [[String: Any]] ?? []
+            return group["matcher"] == nil && handlers.contains { $0["command"] as? String == command }
+        }
+        if !registered {
+            groups.append(["hooks": [["type": "command", "command": command]]])
+            hooks[kind.rawValue] = groups
+            changed = true
+        }
+    }
+    if changed {
+        settings["hooks"] = hooks
+        var document = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        document.append(10)
+        try document.write(to: file, options: .atomic)
+    }
+}

@@ -27,6 +27,7 @@ private func setup(_ client: String) throws {
     }
     switch client {
     case "claude":
+        try installClaudeHooks()
         if try claudeAlreadyConfigured(helper: executable) {
             print("Seance is already configured for Claude Code")
             return
@@ -50,6 +51,7 @@ private func setup(_ client: String) throws {
 
 do {
     switch Array(CommandLine.arguments.dropFirst()) {
+    case ["claude-hook"]: try relayClaudeHook()
     case ["mcp"]: try relay()
     case ["setup", "claude"]: try setup("claude")
     case ["setup", "codex"]: try setup("codex")

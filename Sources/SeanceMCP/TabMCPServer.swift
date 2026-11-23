@@ -5,6 +5,7 @@ import SeanceIPC
 
 @MainActor
 public final class TabMCPServer {
+    public var onClaudeHook: ((ClaudeHookKind, TabID, UUID) -> Void)?
     public let socketPath: String
     private let store: TabStore
     private let privateDirectory: URL?
@@ -87,6 +88,18 @@ public final class TabMCPServer {
         var input = LineReader(fd)
         do {
             guard let header = try input.next() else { return }
+            if header == Data(ClaudeHook.header.utf8) {
+                guard let payload = try input.next() else { return }
+                let event = try JSONDecoder().decode(ClaudeHook.self, from: payload)
+                DispatchQueue.main.sync {
+                    let tab = TabID(event.tabID)
+                    if (try? store.tab(tab)) != nil {
+                        onClaudeHook?(event.kind, tab, event.sessionID)
+                    }
+                }
+                try writeLine(Data("ok".utf8), to: fd)
+                return
+            }
             let caller = UUID(uuidString: String(decoding: header, as: UTF8.self)).map(TabID.init)
             let session = DispatchQueue.main.sync { TabMCPSession(store: store, caller: caller) }
             while let message = try input.next() {
