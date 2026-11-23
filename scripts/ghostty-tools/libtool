@@ -1,0 +1,10 @@
+#!/bin/sh
+# Upstream combines Zig static archives with libtool. Xcode 27's libtool
+# skips unaligned members, including the object defining ghostty_app_new.
+set -eu
+if [ "$1" = "-static" ] && [ "$2" = "-o" ]; then
+    output=$3
+    shift 3
+    exec "$SEANCE_ZIG" ar --format=darwin qcLs "$output" "$@"
+fi
+exec /usr/bin/libtool "$@"

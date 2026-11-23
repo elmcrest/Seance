@@ -1,0 +1,7 @@
+#!/bin/sh
+# Zig 0.14 asks xcrun directly and doesn't honor SDKROOT for host linking.
+if [ "$*" = "--sdk macosx --show-sdk-path" ]; then
+    echo "$SEANCE_MACOS_SDK"
+else
+    exec /usr/bin/xcrun "$@"
+fi

@@ -1,0 +1,83 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+root=$PWD
+vendor="$root/.build/vendor"
+source_dir="$vendor/ghostty"
+revision=6d2dd585a5d87fa745d48188dd096ca6e63014d0
+mkdir -p "$vendor"
+
+verify() {
+    actual=$(shasum -a 256 "$1" | cut -d' ' -f1)
+    if [ "$actual" != "$2" ]; then
+        echo "Checksum mismatch for $1" >&2
+        exit 1
+    fi
+}
+
+if [ ! -d "$source_dir" ]; then
+    git clone --quiet --depth=1 --branch v1.2.3 https://github.com/ghostty-org/ghostty.git "$source_dir"
+fi
+if [ "$(git -C "$source_dir" rev-parse HEAD)" != "$revision" ]; then
+    echo "Expected Ghostty v1.2.3 ($revision) in $source_dir" >&2
+    exit 1
+fi
+if [ -f "$source_dir/.seance-prepared" ] && [ -d "$source_dir/macos/GhosttyKit.xcframework" ]; then
+    exit 0
+fi
+
+if command -v zig >/dev/null && [ "$(zig version)" = 0.14.1 ]; then
+    SEANCE_ZIG=$(command -v zig)
+else
+    case "$(uname -m)" in
+        arm64) arch=aarch64; digest=39f3dc5e79c22088ce878edc821dedb4ca5a1cd9f5ef915e9b3cc3053e8faefa ;;
+        x86_64) arch=x86_64; digest=b0f8bdfb9035783db58dd6c19d7dea89892acc3814421853e5752fe4573e5f43 ;;
+        *) echo "Unsupported macOS architecture" >&2; exit 1 ;;
+    esac
+    distribution="zig-$arch-macos-0.14.1"
+    SEANCE_ZIG="$vendor/$distribution/zig"
+    if [ ! -x "$SEANCE_ZIG" ]; then
+        curl -fL --retry 3 "https://ziglang.org/download/0.14.1/$distribution.tar.xz" -o "$vendor/$distribution.tar.xz"
+        verify "$vendor/$distribution.tar.xz" "$digest"
+        tar -xf "$vendor/$distribution.tar.xz" -C "$vendor"
+    fi
+fi
+export SEANCE_ZIG
+
+# The themes release asset named in v1.2.3 has been removed upstream.
+# The official Ghostty.app contains the identical content-addressed package.
+themes=N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y
+cache_dir=${ZIG_GLOBAL_CACHE_DIR:-"$HOME/.cache/zig"}
+if [ ! -d "$cache_dir/p/$themes" ]; then
+    image="$vendor/Ghostty-1.2.3.dmg"
+    curl -fL --retry 3 https://release.files.ghostty.org/1.2.3/Ghostty.dmg -o "$image"
+    verify "$image" f35ee91f116e28027ab9f8def45098c7575b44b407ff883a2dcd2985c483206b
+    mount=$(mktemp -d "$vendor/themes.XXXXXX")
+    hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$image" >/dev/null
+    trap 'hdiutil detach "$mount" >/dev/null; rmdir "$mount" 2>/dev/null || true' EXIT
+    actual=$("$SEANCE_ZIG" fetch "$mount/Ghostty.app/Contents/Resources/ghostty/themes")
+    [ "$actual" = "$themes" ] || { echo "Unexpected Ghostty theme package hash" >&2; exit 1; }
+fi
+
+if ! /usr/bin/xcrun metal --version >/dev/null 2>&1; then
+    echo "Install the Xcode Metal compiler with: xcodebuild -downloadComponent MetalToolchain" >&2
+    exit 1
+fi
+SEANCE_MACOS_SDK=${SEANCE_MACOS_SDK:-$(/usr/bin/xcrun --sdk macosx --show-sdk-path)}
+# Use a pre-26 SDK for Zig on arm64. Recent SDK stubs require a newer
+# linker; Swift and Metal continue to use the selected Xcode toolchain.
+if [ "$(uname -m)" = arm64 ] && [ "$SEANCE_MACOS_SDK" = "$(/usr/bin/xcrun --sdk macosx --show-sdk-path)" ]; then
+    for version in 15.4 14.4; do
+        sdk="/Library/Developer/CommandLineTools/SDKs/MacOSX$version.sdk"
+        if [ -d "$sdk" ]; then
+            SEANCE_MACOS_SDK=$sdk
+            break
+        fi
+    done
+fi
+export SEANCE_MACOS_SDK
+cd "$source_dir"
+PATH="$root/scripts/ghostty-tools:$PATH" SDKROOT="$SEANCE_MACOS_SDK" MACOSX_DEPLOYMENT_TARGET=14.0 \
+    "$SEANCE_ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
+    -Dxcframework-target=native -Demit-macos-app=false -Dsentry=false
+touch .seance-prepared
