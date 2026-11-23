@@ -7,14 +7,16 @@ import SeanceCore
 final class GhosttyRuntime {
     let store: TabStore
     let environment: [String: String]
+    let pasteboard: NSPasteboard
     private(set) var app: ghostty_app_t?
     private var config: ghostty_config_t?
     var newTab: () -> Void = {}
     var closeTab: (TabID) -> Void = { _ in }
     var childExited: (TabID) -> Void = { _ in }
 
-    init(store: TabStore, environment: [String: String]) throws {
+    init(store: TabStore, environment: [String: String], pasteboard: NSPasteboard = .general) throws {
         self.store = store
+        self.pasteboard = pasteboard
         self.environment = environment
         if let resources = Bundle.main.resourceURL?.appendingPathComponent("ghostty") {
             setenv("GHOSTTY_RESOURCES_DIR", resources.path, 1)
@@ -36,7 +38,7 @@ final class GhosttyRuntime {
         }
         runtime.read_clipboard_cb = { pointer, location, state in
             guard let view = TerminalView.from(pointer), let surface = view.surface else { return }
-            let text = location == GHOSTTY_CLIPBOARD_STANDARD ? NSPasteboard.general.string(forType: .string) : nil
+            let text = location == GHOSTTY_CLIPBOARD_STANDARD ? view.runtime.pasteboard.string(forType: .string) : nil
             ghostty_surface_complete_clipboard_request(surface, text ?? "", state, false)
         }
         runtime.confirm_read_clipboard_cb = { pointer, value, state, request in
@@ -49,14 +51,14 @@ final class GhosttyRuntime {
                 ghostty_surface_complete_clipboard_request(surface, allow ? text : "", state, true)
             }
         }
-        runtime.write_clipboard_cb = { _, value, location, needsConfirmation in
-            guard location == GHOSTTY_CLIPBOARD_STANDARD, let value else { return }
+        runtime.write_clipboard_cb = { pointer, value, location, needsConfirmation in
+            guard location == GHOSTTY_CLIPBOARD_STANDARD, let value, let view = TerminalView.from(pointer) else { return }
             let text = String(cString: value)
             if needsConfirmation && !GhosttyRuntime.confirm("Allow the terminal program to replace the clipboard?", detail: String(text.prefix(800))) {
                 return
             }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            view.runtime.pasteboard.clearContents()
+            view.runtime.pasteboard.setString(text, forType: .string)
         }
         runtime.close_surface_cb = { pointer, alive in
             guard let view = TerminalView.from(pointer) else { return }
