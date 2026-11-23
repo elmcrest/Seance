@@ -6,11 +6,16 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Seance", targets: ["Seance"]),
+        .executable(name: "SeanceCLI", targets: ["SeanceCLI"]),
         .library(name: "SeanceCore", targets: ["SeanceCore"]),
     ],
     targets: [
         .target(name: "SeanceCore"),
-        .executableTarget(name: "Seance", dependencies: ["SeanceCore"]),
+        .target(name: "SeanceIPC"),
+        .target(name: "SeanceMCP", dependencies: ["SeanceCore", "SeanceIPC"]),
+        .executableTarget(name: "SeanceCLI", dependencies: ["SeanceIPC"]),
+        .testTarget(name: "SeanceMCPTests", dependencies: ["SeanceMCP", "SeanceCore", "SeanceCLI"]),
+        .executableTarget(name: "Seance", dependencies: ["SeanceCore", "SeanceMCP"]),
         .testTarget(name: "SeanceCoreTests", dependencies: ["SeanceCore"]),
     ]
 )
