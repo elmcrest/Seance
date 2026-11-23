@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             _ = try openTerminal(directory: FileManager.default.homeDirectoryForCurrentUser)
             observeSelection()
             NSApp.activate(ignoringOtherApps: true)
+            FullDiskAccess.present(in: window, atLaunch: true)
         } catch {
             NSAlert(error: error).runModal()
             NSApp.terminate(nil)
@@ -117,6 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let directory = store.selectedID.flatMap { try? store.tab($0).directory } ?? FileManager.default.homeDirectoryForCurrentUser
         do { try openTerminal(directory: directory) }
         catch { NSAlert(error: error).runModal() }
+    }
+
+    @objc func reviewFullDiskAccess() {
+        if let window { FullDiskAccess.present(in: window) }
     }
 
     @objc func closeCurrentTab() {
@@ -187,6 +192,8 @@ app.setActivationPolicy(.regular)
 let menu = NSMenu()
 let applicationItem = menu.addItem(withTitle: "Seance", action: nil, keyEquivalent: "")
 applicationItem.submenu = NSMenu()
+applicationItem.submenu?.addItem(withTitle: "Full Disk Access…", action: #selector(AppDelegate.reviewFullDiskAccess), keyEquivalent: "").target = delegate
+applicationItem.submenu?.addItem(.separator())
 applicationItem.submenu?.addItem(withTitle: "Quit Seance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 let tabMenu = NSMenu(title: "Tab")
 tabMenu.addItem(withTitle: "New Tab", action: #selector(AppDelegate.newTab), keyEquivalent: "t").target = delegate
