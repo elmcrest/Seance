@@ -16,7 +16,7 @@ func presentNewTabPicker(
         window.endSheet(panel)
     }
     let picker = NewTabPicker(
-        provider: ClaudeSessionProvider(),
+        providers: ["claude": ClaudeSessionProvider(), "codex": CodexSessionProvider()],
         attachments: attachments,
         onNewTerminal: {
             dismiss()

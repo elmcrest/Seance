@@ -1,6 +1,6 @@
 # Seance
 
-Seance is a single-window macOS terminal with a searchable tab sidebar and a picker for resuming local Claude Code conversations. AppKit hosts the terminal, SwiftUI draws the sidebar, and full libghostty owns each shell and PTY.
+Seance is a single-window macOS terminal with a searchable tab sidebar and a picker for resuming local Claude Code and Codex conversations. AppKit hosts the terminal, SwiftUI draws the sidebar, and full libghostty owns each shell and PTY.
 
 Seance is MIT licensed. No telemetry, accounts, or upsells.
 
@@ -20,7 +20,7 @@ The development bundle and build products live under this worktree’s .build di
 
 ## Tabs and sessions
 
-Press **⌘T** and Return to open a terminal in the current tab’s last reported directory. Type to search saved Claude sessions, then choose one to run `claude --resume` in its directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Conversation previews use bounded reads from the beginning and end of transcripts.
+Press **⌘T** and Return to open a terminal in the current tab’s last reported directory. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery reads local rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles. Conversation previews use bounded reads from the beginning and end of transcripts.
 
 Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
 
@@ -43,7 +43,7 @@ Claude setup adds a user-scoped MCP registration and merges SessionStart and Ses
 | `get_current_tab` | Return the tab that launched this client, even when another tab has focus. |
 | `rename_tab` | Set the caller’s title override, or supply an explicit `tab_id`. Pass `null` as the title to clear it. |
 
-The bundled helper bridges stdio to a private Unix socket in the running app. Each surface receives its own `TAB_ID` and its app’s socket path. Codex can use the MCP tools today. The session picker currently supports Claude Code.
+The bundled helper bridges stdio to a private Unix socket in the running app. Each surface receives its own `TAB_ID` and its app’s socket path.
 
 ## Parallel development
 

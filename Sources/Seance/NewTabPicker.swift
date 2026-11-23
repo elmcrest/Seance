@@ -3,7 +3,7 @@ import SeanceCore
 import SwiftUI
 
 struct NewTabPicker: View {
-    let provider: any AgentSessionProvider
+    let providers: [String: any AgentSessionProvider]
     let attachments: SessionAttachments
     let onNewTerminal: () -> Void
     let onResume: (AgentSession, SessionLaunch) -> Void
@@ -28,6 +28,7 @@ struct NewTabPicker: View {
                 term.isEmpty || session.title.localizedStandardContains(term)
                     || session.directory.path.localizedStandardContains(term)
                     || session.id.sessionID.localizedStandardContains(term)
+                    || ProviderMark.name(for: session.id.providerID).localizedStandardContains(term)
             )
         }
     }
@@ -73,13 +74,28 @@ struct NewTabPicker: View {
             if !current.contains(selection) { selection = .terminal }
         }
         .task {
-            do {
-                sessions = try await provider.listSessions()
-                selectFirstMatch(for: query)
-            } catch is CancellationError {
-                return
-            } catch {
-                errorMessage = "Couldn’t read sessions. " + error.localizedDescription
+            await withTaskGroup(of: (String, Result<[AgentSession], Error>).self) { group in
+                for (id, provider) in providers {
+                    group.addTask {
+                        do { return (id, .success(try await provider.listSessions())) }
+                        catch { return (id, .failure(error)) }
+                    }
+                }
+                for await (id, result) in group {
+                    guard !Task.isCancelled else { return }
+                    switch result {
+                    case .success(let found):
+                        sessions.append(contentsOf: found)
+                        sessions.sort {
+                            if $0.modifiedAt != $1.modifiedAt { return $0.modifiedAt > $1.modifiedAt }
+                            if $0.id.providerID != $1.id.providerID { return $0.id.providerID < $1.id.providerID }
+                            return $0.id.sessionID < $1.id.sessionID
+                        }
+                        if selection == .terminal { selectFirstMatch(for: query) }
+                    case .failure(let error):
+                        errorMessage = "Couldn’t read " + ProviderMark.name(for: id) + " sessions. " + error.localizedDescription
+                    }
+                }
             }
             loading = false
         }
@@ -132,7 +148,7 @@ struct NewTabPicker: View {
         case .terminal:
             onNewTerminal()
         case .session(let key):
-            guard let session = matches.first(where: { $0.id == key }) else { return }
+            guard let session = matches.first(where: { $0.id == key }), let provider = providers[key.providerID] else { return }
             do {
                 onResume(session, try provider.launch(for: session))
             } catch {
