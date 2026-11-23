@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="silver-base" x1="0" y1="0" x2=".92" y2="1">
+      <stop offset="0" stop-color="#a4a6b0"/>
+      <stop offset=".18" stop-color="#c5c6cc"/>
+      <stop offset=".42" stop-color="#9c9da6"/>
+      <stop offset=".69" stop-color="#888a95"/>
+      <stop offset=".86" stop-color="#c1c2ca"/>
+      <stop offset="1" stop-color="#777b89"/>
+    </linearGradient>
+    <linearGradient id="top-metal" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#a0a3af"/>
+      <stop offset=".12" stop-color="#fafbfc"/>
+      <stop offset=".22" stop-color="#a5a7b1"/>
+      <stop offset=".47" stop-color="#fafafa"/>
+      <stop offset=".68" stop-color="#c3c4cb"/>
+      <stop offset=".8" stop-color="#9b9da8"/>
+      <stop offset=".89" stop-color="#f3f4f7"/>
+      <stop offset="1" stop-color="#9b9da6"/>
+    </linearGradient>
+    <linearGradient id="metal-overlay" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="white" stop-opacity=".03"/>
+      <stop offset=".2" stop-color="white" stop-opacity="0"/>
+      <stop offset=".32" stop-color="#d4d5de" stop-opacity=".7"/>
+      <stop offset=".54" stop-color="#b2b3be" stop-opacity=".85"/>
+      <stop offset=".76" stop-color="#777b87" stop-opacity=".82"/>
+      <stop offset="1" stop-color="#888b97" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rim-edge" x1="0" y1="0" x2=".6" y2="1">
+      <stop stop-color="#f5f6f7"/>
+      <stop offset=".35" stop-color="#cbccd1"/>
+      <stop offset=".7" stop-color="#8f919d"/>
+      <stop offset="1" stop-color="#626674"/>
+    </linearGradient>
+    <linearGradient id="inner-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#62627f"/>
+      <stop offset=".23" stop-color="#b3b6c6"/>
+      <stop offset=".58" stop-color="#74798c"/>
+      <stop offset="1" stop-color="#f3f3f5"/>
+    </linearGradient>
+    <radialGradient id="screen-color" cx=".49" cy=".43" r=".7">
+      <stop stop-color="#10052c"/>
+      <stop offset=".5" stop-color="#0c0335"/>
+      <stop offset=".83" stop-color="#080128"/>
+      <stop offset="1" stop-color="#01000d"/>
+    </radialGradient>
+    <radialGradient id="upper-screen-light" cx=".5" cy="0" r=".65">
+      <stop stop-color="#332478" stop-opacity=".85"/>
+      <stop offset=".43" stop-color="#221563" stop-opacity=".32"/>
+      <stop offset="1" stop-color="#140743" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass-reflection" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#9b90f0" stop-opacity=".77"/>
+      <stop offset=".27" stop-color="#8173df" stop-opacity=".66"/>
+      <stop offset=".67" stop-color="#5e4cbd" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#433098" stop-opacity=".08"/>
+    </linearGradient>
+    <radialGradient id="candle-halo">
+      <stop stop-color="#ffb400" stop-opacity=".85"/>
+      <stop offset=".22" stop-color="#ff9b00" stop-opacity=".71"/>
+      <stop offset=".43" stop-color="#e26700" stop-opacity=".43"/>
+      <stop offset=".65" stop-color="#9e3b28" stop-opacity=".21"/>
+      <stop offset="1" stop-color="#7c2740" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wax-color" x1="0" y1="0" x2="1" y2=".5">
+      <stop stop-color="#fff51a"/>
+      <stop offset=".28" stop-color="#fff800"/>
+      <stop offset="1" stop-color="#ffff03"/>
+    </linearGradient>
+    <radialGradient id="flame-color" cx=".4" cy=".78" r=".83">
+      <stop stop-color="#ffff73"/>
+      <stop offset=".28" stop-color="#ffe52a"/>
+      <stop offset=".63" stop-color="#ffb000"/>
+      <stop offset="1" stop-color="#ff8500"/>
+    </radialGradient>
+    <filter id="broad-glow" x="-200%" y="-130%" width="500%" height="360%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+    <filter id="warm-glow" x="-70%" y="-45%" width="240%" height="190%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <filter id="flame-glow" x="-120%" y="-60%" width="340%" height="220%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <filter id="spark-glow" x="-150%" y="-150%" width="400%" height="400%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <filter id="soft-reflection" x="-3%" y="-15%" width="106%" height="130%">
+      <feGaussianBlur stdDeviation="1.2"/>
+    </filter>
+    <pattern id="crt-scanlines" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="2" fill="#02000b" opacity=".34"/>
+      <rect y="2" width="6" height="1" fill="#c9c1ff" opacity=".075"/>
+    </pattern>
+    <pattern id="crt-phosphors" width="3" height="6" patternUnits="userSpaceOnUse">
+      <rect width="1" height="6" fill="#ff4262" opacity=".055"/>
+      <rect x="1" width="1" height="6" fill="#70ff9f" opacity=".04"/>
+      <rect x="2" width="1" height="6" fill="#6495ff" opacity=".07"/>
+    </pattern>
+    <radialGradient id="crt-vignette" cx=".5" cy=".47" r=".67">
+      <stop offset=".35" stop-color="#00000c" stop-opacity="0"/>
+      <stop offset=".72" stop-color="#00000c" stop-opacity=".13"/>
+      <stop offset="1" stop-color="#000008" stop-opacity=".65"/>
+    </radialGradient>
+    <linearGradient id="crt-refresh-band" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#ac9fff" stop-opacity="0"/>
+      <stop offset=".35" stop-color="#ac9fff" stop-opacity="0"/>
+      <stop offset=".44" stop-color="#ac9fff" stop-opacity=".035"/>
+      <stop offset=".54" stop-color="#ac9fff" stop-opacity=".015"/>
+      <stop offset=".62" stop-color="#ac9fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ac9fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="crt-color-fringe" filterUnits="userSpaceOnUse" x="50" y="57" width="927" height="900" color-interpolation-filters="sRGB">
+      <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .45 0"/>
+      <feOffset dx="-2" result="red"/>
+      <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 .4 0"/>
+      <feOffset dx="2" result="cyan"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation=".45" result="soft-image"/>
+      <feMerge>
+        <feMergeNode in="red"/>
+        <feMergeNode in="cyan"/>
+        <feMergeNode in="soft-image"/>
+      </feMerge>
+    </filter>
+    <filter id="crt-grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="2" seed="17"/>
+      <feColorMatrix type="matrix" values="0 0 0 .65 0  0 0 0 .6 0  0 0 0 .85 0  0 0 0 .065 0"/>
+    </filter>
+    <path id="outer-shape" d="M310 10 C381 8 645 8 712 10 C808 10 866 29 914 72 C981 132 1004 211 1011 307 C1017 388 1016 624 1011 700 C1006 797 982 871 930 925 C879 978 815 999 721 1002 L304 1002 C213 1002 150 984 99 935 C40 879 16 804 11 707 C6 617 6 402 11 319 C17 219 37 146 92 87 C146 28 212 10 310 10 Z"/>
+    <path id="screen-shape" d="M312 59 C398 56 631 56 711 59 C803 60 857 76 897 115 C949 166 965 230 970 320 C975 407 975 615 970 696 C966 787 947 850 901 896 C856 941 802 952 713 954 C610 956 407 956 310 953 C223 951 169 936 126 895 C79 849 61 789 56 703 C50 620 51 406 55 325 C60 231 77 171 121 125 C166 78 217 61 312 59 Z"/>
+    <clipPath id="screen-clip">
+      <use href="#screen-shape"/>
+    </clipPath>
+  </defs>
+  <g id="background">
+    <rect width="1024" height="1024" fill="#000"/>
+  </g>
+  <g id="rounded-silver-enclosure">
+    <use href="#outer-shape" fill="url(#silver-base)" stroke="#575b66" stroke-width="3"/>
+    <use href="#outer-shape" fill="url(#top-metal)"/>
+    <use href="#outer-shape" fill="url(#metal-overlay)" stroke="url(#rim-edge)" stroke-width="2.5"/>
+    <path d="M74 110 C132 31 201 12 311 12 C422 9 633 10 714 12 C811 12 868 32 914 75" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2"/>
+    <path d="M312 49 C409 47 626 47 711 49 C806 49 864 67 908 108 C961 159 978 229 981 319 C986 407 986 619 981 701 C976 795 954 862 907 909 C860 953 805 964 714 965 C610 968 408 967 306 965 C215 962 159 945 114 902 C66 855 48 792 44 705 C39 615 40 408 44 322 C48 226 66 161 113 114 C161 65 218 51 312 49 Z" fill="#343346" stroke="#b5b6c4" stroke-opacity=".45" stroke-width="1.5"/>
+    <use href="#screen-shape" fill="url(#screen-color)" stroke="url(#inner-rim)" stroke-width="2.4"/>
+  </g>
+  <g id="glass-screen" clip-path="url(#screen-clip)">
+    <rect x="50" y="57" width="927" height="900" fill="url(#upper-screen-light)"/>
+    <path id="top-glass-highlight" d="M166 176 C164 153 169 132 181 123 C218 96 337 87 498 87 C653 86 787 94 826 117 C844 127 849 145 850 175 C773 148 667 137 511 137 C356 136 247 147 166 176 Z" fill="url(#glass-reflection)" filter="url(#soft-reflection)"/>
+    <ellipse id="diffuse-amber-aura" cx="513" cy="510" rx="246" ry="268" fill="url(#candle-halo)"/>
+    <ellipse cx="510" cy="512" rx="143" ry="183" fill="url(#candle-halo)" opacity=".58"/>
+  </g>
+  <g clip-path="url(#screen-clip)">
+    <g filter="url(#crt-color-fringe)">
+      <g id="luminous-candle">
+        <rect x="460" y="443" width="104" height="154" fill="#ff8900" filter="url(#broad-glow)"/>
+        <rect x="463" y="445" width="99" height="151" fill="#ffc000" filter="url(#warm-glow)"/>
+        <rect x="465.5" y="446" width="94" height="149" fill="url(#wax-color)"/>
+        <path d="M466 446 H559" fill="none" stroke="#fff947" stroke-width="1.2"/>
+        <path d="M466 594.5 H559" fill="none" stroke="#ffed00" stroke-width="1"/>
+        <g id="golden-flame">
+          <path d="M514 377 C516 389 526 403 526 418 C526 429 520 435 512 439 C501 435 495 427 499 414 C502 402 513 391 514 377 Z" fill="#ff9700" filter="url(#flame-glow)"/>
+          <path d="M514 378 C515 392 525 404 525 418 C526 427 520 434 512 437 C505 433 499 428 500 418 C500 405 513 392 514 378 Z" fill="url(#flame-color)"/>
+          <path d="M512 407 C512 416 507 421 508 428 C508 432 511 434 513 435 C519 429 520 423 517 417 Z" fill="#fff45a" opacity=".44" filter="url(#flame-glow)"/>
+        </g>
+      </g>
+      <g id="ascending-violet-sparks">
+        <g fill="#ba65ff" filter="url(#spark-glow)" opacity=".64">
+          <rect x="502" y="360" width="12" height="12"/>
+          <rect x="516" y="332" width="11" height="12"/>
+          <rect x="537" y="305" width="12" height="12"/>
+          <rect x="559" y="276" width="11" height="12"/>
+        </g>
+        <rect x="502.5" y="360.5" width="10.5" height="11" fill="#f3b2ff" stroke="#ce85ed" stroke-width=".7"/>
+        <rect x="504.5" y="362" width="6.6" height="7.5" fill="#ffd4ff" opacity=".7"/>
+        <rect x="516" y="332.8" width="10.3" height="10.3" fill="#e7a2ff" stroke="#b57bdf" stroke-width=".7"/>
+        <rect x="518" y="334.4" width="6.8" height="6.9" fill="#efbcff" opacity=".55"/>
+        <rect x="537.7" y="305.7" width="10.2" height="10.4" fill="#c088f3" stroke="#9863d9" stroke-width=".7"/>
+        <rect x="539.5" y="307" width="6.4" height="7.4" fill="#d5a0ff" opacity=".55"/>
+        <rect x="559.4" y="276.5" width="10.1" height="10.5" fill="#b88aef" stroke="#8c60d0" stroke-width=".7"/>
+        <rect x="561" y="278" width="6.5" height="7" fill="#c59afa" opacity=".55"/>
+      </g>
+    </g>
+  </g>
+  <g id="retro-crt-display" clip-path="url(#screen-clip)">
+    <rect x="50" y="57" width="927" height="900" fill="url(#crt-refresh-band)"/>
+    <rect x="50" y="57" width="927" height="900" fill="url(#crt-phosphors)"/>
+    <rect x="50" y="57" width="927" height="900" fill="url(#crt-scanlines)"/>
+    <rect x="50" y="57" width="927" height="900" filter="url(#crt-grain)"/>
+    <rect x="50" y="57" width="927" height="900" fill="url(#crt-vignette)"/>
+  </g>
+  <g id="lower-metal-polish" fill="none">
+    <path d="M67 793 C81 850 102 888 139 916 C184 951 239 960 308 962 C431 966 612 965 713 963 C794 963 851 951 892 918 C929 888 950 849 962 795" stroke="#fff" stroke-opacity=".4" stroke-width="2"/>
+    <path d="M161 967 C200 990 245 1000 306 1000 L718 1000 C776 1000 824 990 859 975" stroke="#c3c5ce" stroke-opacity=".3" stroke-width="1.4"/>
+  </g>
+</svg>

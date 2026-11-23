@@ -8,6 +8,8 @@ Seance is MIT licensed. No telemetry, accounts, or upsells.
 
 Use macOS 14 or later, Xcode with Swift 6, and the Xcode Metal compiler. If Metal is missing, install it with `xcodebuild -downloadComponent MetalToolchain`. The first app build downloads the pinned Ghostty source and a checksummed Zig 0.14.1 toolchain when needed. On Apple Silicon with a recent Xcode, Zig may require an older macOS SDK. The build detects locally installed 15.4 and 14.4 SDKs, or you can supply a compatible path via `SEANCE_MACOS_SDK`.
 
+The app icon build uses `resvg` for the SVG’s CRT filters. Install it with `brew install resvg` if needed.
+
 Run the following commands from the checkout.
 
 ```sh
