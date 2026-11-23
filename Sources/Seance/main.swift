@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let server = try TabMCPServer(store: store)
+            let server = try TabMCPServer(store: store, attachments: attachments)
             server.onClaudeHook = { [attachments] kind, tab, session in
                 let key = SessionKey(providerID: "claude", sessionID: session.uuidString)
                 switch kind {
@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
             let split = NSSplitViewController()
             let sidebar = SampleSidebar(
-                store: store,
+                store: store, attachments: attachments,
                 onNewTab: { [weak self] in self?.newTab() },
                 onCloseTab: { [weak self] id in self?.surfaces[id]?.requestClose() },
                 onActivateTab: { [weak self] id in self?.focus(id) }

@@ -48,9 +48,9 @@ struct NewTabPicker: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        row(.terminal, title: "New terminal", detail: nil, icon: "terminal")
+                        row(.terminal, title: "New terminal", detail: nil)
                         ForEach(visible) { session in
-                            row(.session(session.id), title: session.title, detail: session.directory.path, icon: "text.bubble")
+                            row(.session(session.id), title: session.title, detail: session.directory.path)
                         }
                     }
                     .padding(6)
@@ -94,12 +94,15 @@ struct NewTabPicker: View {
         }
     }
 
-    private func row(_ choice: Choice, title: String, detail: String?, icon: String) -> some View {
+    private func row(_ choice: Choice, title: String, detail: String?) -> some View {
         Button { choose(choice) } label: {
             HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
+                switch choice {
+                case .terminal:
+                    Image(systemName: "terminal").foregroundStyle(.secondary).frame(width: 20)
+                case .session(let key):
+                    ProviderMark(provider: key.providerID).frame(width: 20)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).lineLimit(1)
                     if let detail {
@@ -107,6 +110,12 @@ struct NewTabPicker: View {
                     }
                 }
                 Spacer()
+                if case .session(let key) = choice {
+                    Text(ProviderMark.name(for: key.providerID))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
             }
             .padding(8)
             .background(choice == selection ? Color.accentColor.opacity(0.18) : .clear,

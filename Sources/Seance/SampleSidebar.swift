@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SampleSidebar: View {
     let store: TabStore
+    let attachments: SessionAttachments
     var onNewTab: (() -> Void)? = nil
     var onCloseTab: ((TabID) -> Void)? = nil
     var onActivateTab: ((TabID) -> Void)? = nil
@@ -94,7 +95,12 @@ struct SampleSidebar: View {
                     .onExitCommand { editingID = nil }
                     .onAppear { renameFocused = true }
             } else {
-                Text(tab.title).lineLimit(1)
+                HStack(spacing: 5) {
+                    ForEach(attachments.providers(in: tab.id), id: \.self) { provider in
+                        ProviderMark(provider: provider)
+                    }
+                    Text(tab.title).lineLimit(1)
+                }
             }
             if let secondary = tab.secondaryTitle {
                 Text(secondary).font(.caption).foregroundStyle(.secondary).lineLimit(1)

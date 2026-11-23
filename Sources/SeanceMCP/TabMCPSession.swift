@@ -7,11 +7,18 @@ final class TabMCPSession {
     private typealias Object = [String: Any]
     private let store: TabStore
     private let caller: TabID?
+    private let attachments: SessionAttachments?
+    private let clientID = UUID()
     private var initialized = false
 
-    init(store: TabStore, caller: TabID?) {
+    init(store: TabStore, caller: TabID?, attachments: SessionAttachments? = nil) {
         self.store = store
         self.caller = caller
+        self.attachments = attachments
+    }
+
+    func disconnect() {
+        if let caller { attachments?.disconnect(clientID, in: caller) }
     }
 
     func handle(_ data: Data) -> Data? {
@@ -36,6 +43,14 @@ final class TabMCPSession {
                 return failure(-32602, "Expected initial protocol version", id)
             }
             initialized = true
+            if let caller, (try? store.tab(caller)) != nil,
+               let client = params["clientInfo"] as? Object, let name = client["name"] as? String {
+                switch name {
+                case "codex-mcp-client": attachments?.connect(clientID, provider: "codex", in: caller)
+                case "claude-code": attachments?.connect(clientID, provider: "claude", in: caller)
+                default: break
+                }
+            }
             let versions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
             result = ["protocolVersion": versions.contains(requested) ? requested : versions[0],
                       "capabilities": ["tools": [:]], "serverInfo": ["name": "seance", "version": "0.1.0"]]

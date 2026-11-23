@@ -46,7 +46,26 @@ public protocol AgentSessionProvider: Sendable {
 public final class SessionAttachments {
     private var tabsBySession: [SessionKey: Set<TabID>] = [:]
 
+    private var clientsByTab: [TabID: [UUID: String]] = [:]
+
     public init() {}
+
+    public func providers(in tab: TabID) -> [String] {
+        var providers = Set(tabsBySession.compactMap { key, tabs in
+            tabs.contains(tab) ? key.providerID : nil
+        })
+        if let clients = clientsByTab[tab] { providers.formUnion(clients.values) }
+        return providers.sorted()
+    }
+
+    public func connect(_ client: UUID, provider: String, in tab: TabID) {
+        clientsByTab[tab, default: [:]][client] = provider
+    }
+
+    public func disconnect(_ client: UUID, in tab: TabID) {
+        clientsByTab[tab]?.removeValue(forKey: client)
+        if clientsByTab[tab]?.isEmpty == true { clientsByTab.removeValue(forKey: tab) }
+    }
 
     public func isAttached(_ key: SessionKey) -> Bool {
         tabsBySession[key] != nil
@@ -70,6 +89,7 @@ public final class SessionAttachments {
     }
 
     public func close(_ tab: TabID) {
+        clientsByTab.removeValue(forKey: tab)
         for key in tabsBySession.keys {
             detach(key, from: tab)
         }

@@ -157,3 +157,32 @@ func resumeReleasesSessionWithoutClosingTab(agentInstalled: Bool) async throws {
     #expect(finished)
     #expect(store.selectedID == tab)
 }
+
+@MainActor
+@Test func tabProviderMarksFollowClientAndSessionLifetimes() throws {
+    let store = TabStore()
+    let tab = store.open(directory: .temporaryDirectory)
+    let focused = store.open(directory: .temporaryDirectory)
+    let attachments = SessionAttachments()
+    let claude = SessionKey(providerID: "claude", sessionID: UUID().uuidString)
+    attachments.attach(claude, to: tab)
+    func connect(_ name: String) throws -> TabMCPSession {
+        let session = TabMCPSession(store: store, caller: tab, attachments: attachments)
+        _ = try session.handle(request(1, "initialize", [
+            "protocolVersion": protocolVersion, "clientInfo": ["name": name],
+        ]))
+        return session
+    }
+    let first = try connect("codex-mcp-client")
+    let second = try connect("codex-mcp-client")
+    let hooked = try connect("claude-code")
+    #expect(attachments.providers(in: tab) == ["claude", "codex"])
+    #expect(attachments.providers(in: focused).isEmpty)
+    first.disconnect()
+    hooked.disconnect()
+    #expect(attachments.providers(in: tab) == ["claude", "codex"])
+    attachments.detach(claude, from: tab)
+    #expect(attachments.providers(in: tab) == ["codex"])
+    second.disconnect()
+    #expect(attachments.providers(in: tab).isEmpty)
+}

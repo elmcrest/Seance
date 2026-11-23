@@ -8,14 +8,16 @@ public final class TabMCPServer {
     public var onClaudeHook: ((ClaudeHookKind, TabID, UUID) -> Void)?
     public let socketPath: String
     private let store: TabStore
+    private let attachments: SessionAttachments?
     private let privateDirectory: URL?
     private var listener: DispatchSourceRead?
     private var pendingResumes: [TabID: (SessionLaunch, @MainActor () -> Void)] = [:]
     private var resumeProcesses: [TabID: DispatchSourceProcess] = [:]
     private var clients: Set<Int32> = []
 
-    public init(store: TabStore, socketPath: String? = ProcessInfo.processInfo.environment["SEANCE_LISTEN_SOCKET_PATH"]) throws {
+    public init(store: TabStore, attachments: SessionAttachments? = nil, socketPath: String? = ProcessInfo.processInfo.environment["SEANCE_LISTEN_SOCKET_PATH"]) throws {
         self.store = store
+        self.attachments = attachments
         if let socketPath {
             self.socketPath = socketPath
             self.privateDirectory = nil
@@ -138,7 +140,8 @@ public final class TabMCPServer {
                 return
             }
             let caller = UUID(uuidString: String(decoding: header, as: UTF8.self)).map(TabID.init)
-            let session = DispatchQueue.main.sync { TabMCPSession(store: store, caller: caller) }
+            let session = DispatchQueue.main.sync { TabMCPSession(store: store, caller: caller, attachments: attachments) }
+            defer { DispatchQueue.main.sync { session.disconnect() } }
             while let message = try input.next() {
                 let reply = DispatchQueue.main.sync { session.handle(message) }
                 try writeLine(reply ?? Data(), to: fd)
