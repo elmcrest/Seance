@@ -192,6 +192,10 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
         for (flag, modifier): (NSEvent.ModifierFlags, ghostty_input_mods_e) in [
             (.shift, GHOSTTY_MODS_SHIFT), (.control, GHOSTTY_MODS_CTRL), (.option, GHOSTTY_MODS_ALT),
             (.command, GHOSTTY_MODS_SUPER), (.capsLock, GHOSTTY_MODS_CAPS),
+            (.init(rawValue: UInt(NX_DEVICERSHIFTKEYMASK)), GHOSTTY_MODS_SHIFT_RIGHT),
+            (.init(rawValue: UInt(NX_DEVICERCTLKEYMASK)), GHOSTTY_MODS_CTRL_RIGHT),
+            (.init(rawValue: UInt(NX_DEVICERALTKEYMASK)), GHOSTTY_MODS_ALT_RIGHT),
+            (.init(rawValue: UInt(NX_DEVICERCMDKEYMASK)), GHOSTTY_MODS_SUPER_RIGHT),
         ] where flags.contains(flag) { bits |= modifier.rawValue }
         return ghostty_input_mods_e(bits)
     }
