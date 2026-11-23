@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+signing_identity=$(git config --local --get seance.signingIdentity || true)
+signing_identity=${signing_identity:--}
 ./scripts/prepare-ghostty
 swift build --manifest-cache none --product Seance
 swift build --manifest-cache none --product SeanceCLI
@@ -10,7 +12,7 @@ mkdir -p "$app_dir/Contents/MacOS"
 cp "$bin_dir/Seance" "$app_dir/Contents/MacOS/Seance"
 mkdir -p "$app_dir/Contents/Helpers"
 cp "$bin_dir/SeanceCLI" "$app_dir/Contents/Helpers/seance"
-codesign --force --sign - "$app_dir/Contents/Helpers/seance"
+codesign --force --sign "$signing_identity" "$app_dir/Contents/Helpers/seance"
 cp Sources/Info.plist "$app_dir/Contents/Info.plist"
 source_dir="$PWD/.build/vendor/ghostty"
 resources="$app_dir/Contents/Resources"
@@ -18,4 +20,4 @@ mkdir -p "$resources"
 ditto "$source_dir/zig-out/share/ghostty" "$resources/ghostty"
 ditto "$source_dir/zig-out/share/terminfo" "$resources/terminfo"
 cp "$source_dir/LICENSE" "$resources/Ghostty-LICENSE"
-codesign --force --sign - "$app_dir"
+codesign --force --sign "$signing_identity" "$app_dir"
