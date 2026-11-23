@@ -27,21 +27,7 @@ private func setup(_ client: String) throws {
     }
     switch client {
     case "claude":
-        try installClaudeHooks()
-        if try claudeAlreadyConfigured(helper: executable) {
-            print("Seance is already configured for Claude Code")
-            return
-        }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        // Resolve the tab environment on every client launch, including clients that
-        // sanitize their child environment. Keep the expressions literal during setup.
-        process.arguments = ["claude", "mcp", "add", "--scope", "user", "seance",
-                             "-e", "TAB_ID=${TAB_ID:-}", "-e", "SEANCE_SOCKET_PATH=${SEANCE_SOCKET_PATH:-}",
-                             "--", executable, "mcp"]
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { throw IPCError.message("Claude Code setup failed") }
+        try configureClaude(helper: executable)
     case "codex":
         try configureCodex(helper: executable)
     default:

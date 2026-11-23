@@ -48,19 +48,32 @@ final class GhosttyRuntime {
             let message = request == GHOSTTY_CLIPBOARD_REQUEST_PASTE
                 ? "Paste this text into the terminal?" : "Allow the terminal program to read the clipboard?"
             let text = String(cString: value)
-            let allow = GhosttyRuntime.confirm(message, detail: request == GHOSTTY_CLIPBOARD_REQUEST_PASTE ? String(text.prefix(800)) : "")
-            if let surface = view.surface {
-                ghostty_surface_complete_clipboard_request(surface, allow ? text : "", state, true)
+            let detail = request == GHOSTTY_CLIPBOARD_REQUEST_PASTE ? String(text.prefix(800)) : ""
+            nonisolated(unsafe) let state = state
+            // The modal alert must run after the call into libghostty returns.
+            DispatchQueue.main.async { [weak view] in
+                guard let view, view.surface != nil else { return }
+                let allow = GhosttyRuntime.confirm(message, detail: detail)
+                if let surface = view.surface {
+                    ghostty_surface_complete_clipboard_request(surface, allow ? text : "", state, true)
+                }
             }
         }
         runtime.write_clipboard_cb = { pointer, value, location, needsConfirmation in
             guard location == GHOSTTY_CLIPBOARD_STANDARD, let value, let view = TerminalView.from(pointer) else { return }
             let text = String(cString: value)
-            if needsConfirmation && !GhosttyRuntime.confirm("Allow the terminal program to replace the clipboard?", detail: String(text.prefix(800))) {
+            let pasteboard = view.runtime.pasteboard
+            guard needsConfirmation else {
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
                 return
             }
-            view.runtime.pasteboard.clearContents()
-            view.runtime.pasteboard.setString(text, forType: .string)
+            // The modal alert must run after the call into libghostty returns.
+            DispatchQueue.main.async {
+                guard GhosttyRuntime.confirm("Allow the terminal program to replace the clipboard?", detail: String(text.prefix(800))) else { return }
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+            }
         }
         runtime.close_surface_cb = { pointer, alive in
             guard let view = TerminalView.from(pointer) else { return }
@@ -90,12 +103,17 @@ final class GhosttyRuntime {
         if let config { self.config = nil; ghostty_config_free(config) }
     }
 
-    static func confirm(_ message: String, detail: String) -> Bool {
+    /// Whether any terminal still runs a process that quitting would end.
+    var needsConfirmQuit: Bool {
+        app.map(ghostty_app_needs_confirm_quit) ?? false
+    }
+
+    static func confirm(_ message: String, detail: String, action: String = "Allow") -> Bool {
         let alert = NSAlert()
         alert.messageText = message
         alert.informativeText = detail
         alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: action)
         return alert.runModal() == .alertSecondButtonReturn
     }
 

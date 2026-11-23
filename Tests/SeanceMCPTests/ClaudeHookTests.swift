@@ -47,3 +47,44 @@ private final class BundleMarker: NSObject {}
     #expect(events == ["SessionStart", "SessionEnd"])
     #expect(store.selectedID == focused)
 }
+
+@MainActor
+@Test func claudeSessionEndsWhenItsAgentExitsWithoutAHook() async throws {
+    let store = TabStore()
+    let tab = store.open(directory: URL(filePath: "/tmp/a"))
+    let server = try TabMCPServer(store: store, socketPath: nil)
+    var events: [String] = []
+    server.onClaudeHook = { kind, _, _ in events.append(kind.rawValue) }
+    try server.start()
+    defer { server.stop() }
+
+    let helper = Bundle(for: BundleMarker.self).bundleURL.deletingLastPathComponent()
+        .appendingPathComponent("SeanceCLI")
+    let payload = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+    try JSONSerialization.data(withJSONObject: [
+        "hook_event_name": "SessionStart", "session_id": UUID().uuidString,
+    ]).write(to: payload)
+    defer { try? FileManager.default.removeItem(at: payload) }
+
+    // Perl stands in for the agent: it runs the hook through a shell, then stays alive.
+    let agent = Process()
+    let stdin = Pipe()
+    agent.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+    agent.arguments = ["-e", "system($ENV{HOOK}); <STDIN>;"]
+    agent.environment = [
+        "SEANCE_SOCKET_PATH": server.socketPath, "TAB_ID": tab.rawValue.uuidString,
+        "HOOK": "'\(helper.path)' claude-hook < '\(payload.path)'",
+    ]
+    agent.standardInput = stdin
+    try agent.run()
+    func wait(for count: Int) async throws {
+        for _ in 0..<200 where events.count < count { try await Task.sleep(for: .milliseconds(25)) }
+    }
+    try await wait(for: 1)
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(events == ["SessionStart"])
+
+    try stdin.fileHandleForWriting.close()
+    try await wait(for: 2)
+    #expect(events == ["SessionStart", "SessionEnd"])
+}

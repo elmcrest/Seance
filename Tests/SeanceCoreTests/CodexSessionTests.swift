@@ -50,6 +50,36 @@ import SeanceCore
     #expect(launch.executable == "codex")
     #expect(launch.arguments == ["resume", cli.uuidString.lowercased()])
     #expect(launch.directory.path == cwd.path)
+
+    // While the index cannot be read, an archived conversation must not reappear.
+    try #require(sqlite3_exec(db, "BEGIN EXCLUSIVE", nil, nil, nil) == SQLITE_OK)
+    #expect(try await provider.listSessions().isEmpty)
+    try #require(sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK)
+    #expect(try await provider.listSessions().count == 1)
+
+    // A Codex process can open the rollout after the picker has loaded.
+    let codex = home.appendingPathComponent("codex")
+    try files.copyItem(at: URL(fileURLWithPath: "/bin/cat"), to: codex)
+    let process = Process()
+    process.executableURL = codex
+    let input = Pipe()
+    process.standardInput = input
+    let file = sessions.appendingPathComponent("rollout-2026-11-23T12-00-00-" + cli.uuidString + ".jsonl")
+    let rolloutHandle = try FileHandle(forWritingTo: file)
+    defer { try? rolloutHandle.close() }
+    process.standardOutput = rolloutHandle
+    try process.run()
+    defer { try? input.fileHandleForWriting.close(); process.waitUntilExit() }
+    #expect(try await provider.listSessions().isEmpty)
+    #expect(throws: NSError.self) { try provider.launch(for: session) }
+    try input.fileHandleForWriting.close()
+    process.waitUntilExit()
+    #expect(try provider.launch(for: session).executable == "codex")
+
+    // A broken index cannot vouch for the visibility of any rollout.
+    try #require(sqlite3_exec(db, "DROP TABLE threads", nil, nil, nil) == SQLITE_OK)
+    #expect(try await provider.listSessions().isEmpty)
+
     try files.removeItem(at: cwd)
     #expect(throws: CocoaError.self) { try provider.launch(for: session) }
 }

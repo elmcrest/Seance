@@ -251,17 +251,28 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
         if let surface { ghostty_surface_key(surface, keyEvent(event, action: GHOSTTY_ACTION_RELEASE)) }
     }
     override func flagsChanged(with event: NSEvent) {
+        // The shared flag stays set while the other side's key is held, so the
+        // device bit for this key's own side decides press versus release.
         let flag: NSEvent.ModifierFlags
+        let side: Int32, otherSide: Int32
         switch event.keyCode {
-        case 54, 55: flag = .command
-        case 56, 60: flag = .shift
-        case 58, 61: flag = .option
-        case 59, 62: flag = .control
-        case 57: flag = .capsLock
+        case 54: (flag, side, otherSide) = (.command, NX_DEVICERCMDKEYMASK, NX_DEVICELCMDKEYMASK)
+        case 55: (flag, side, otherSide) = (.command, NX_DEVICELCMDKEYMASK, NX_DEVICERCMDKEYMASK)
+        case 56: (flag, side, otherSide) = (.shift, NX_DEVICELSHIFTKEYMASK, NX_DEVICERSHIFTKEYMASK)
+        case 60: (flag, side, otherSide) = (.shift, NX_DEVICERSHIFTKEYMASK, NX_DEVICELSHIFTKEYMASK)
+        case 58: (flag, side, otherSide) = (.option, NX_DEVICELALTKEYMASK, NX_DEVICERALTKEYMASK)
+        case 61: (flag, side, otherSide) = (.option, NX_DEVICERALTKEYMASK, NX_DEVICELALTKEYMASK)
+        case 59: (flag, side, otherSide) = (.control, NX_DEVICELCTLKEYMASK, NX_DEVICERCTLKEYMASK)
+        case 62: (flag, side, otherSide) = (.control, NX_DEVICERCTLKEYMASK, NX_DEVICELCTLKEYMASK)
+        case 57: (flag, side, otherSide) = (.capsLock, 0, 0)
         default: return
         }
         guard !hasMarkedText(), let surface else { return }
-        let action = event.modifierFlags.contains(flag) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
+        let raw = event.modifierFlags.rawValue
+        // Synthetic events may carry no device bits; fall back to the shared flag.
+        let pressed = event.modifierFlags.contains(flag)
+            && (raw & UInt(side) != 0 || raw & UInt(side | otherSide) == 0)
+        let action = pressed ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
         ghostty_surface_key(surface, keyEvent(event, action: action))
     }
 

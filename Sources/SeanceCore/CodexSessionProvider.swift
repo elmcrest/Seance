@@ -22,27 +22,39 @@ public actor CodexSessionProvider: AgentSessionProvider {
 
     // The index supplies names without reading conversation history. Rollout files
     // determine which conversations still exist after cleanup or migration.
-    private func indexedMetadata() -> [UUID: Metadata] {
+    // An interrupted read is reported as incomplete: a conversation missing from it
+    // may be archived, which its rollout file cannot tell.
+    private func indexedMetadata() -> (rows: [UUID: Metadata], complete: Bool) {
         let path = home.appendingPathComponent("state_5.sqlite").path
         var db: OpaquePointer?
         defer { sqlite3_close(db) }
-        guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return [:] }
+        guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            var info = stat()
+            let missing = lstat(path, &info) == -1 && errno == ENOENT
+            return ([:], missing)
+        }
+        sqlite3_busy_timeout(db, 1000)
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
         // Older versions of the index only have title.
         for expression in ["COALESCE(NULLIF(name, ''), title)", "title"] {
             let query = "SELECT id, cwd, " + expression + ", source, archived FROM threads"
-            if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK { break }
+            let status = sqlite3_prepare_v2(db, query, -1, &statement, nil)
+            if status == SQLITE_OK { break }
+            if status == SQLITE_BUSY || status == SQLITE_LOCKED { return ([:], false) }
         }
-        guard let statement else { return [:] }
+        guard let statement else { return ([:], false) }
         func column(_ i: Int32) -> String? { sqlite3_column_text(statement, i).map { String(cString: $0) } }
         var result: [UUID: Metadata] = [:]
-        while sqlite3_step(statement) == SQLITE_ROW {
-            guard let id = column(0).flatMap(UUID.init(uuidString:)), let cwd = column(1) else { continue }
-            result[id] = Metadata(cwd: cwd, title: column(2),
-                                  visible: sqlite3_column_int(statement, 4) == 0 && Self.interactive(column(3)))
+        var status = sqlite3_step(statement)
+        while status == SQLITE_ROW {
+            if let id = column(0).flatMap(UUID.init(uuidString:)), let cwd = column(1) {
+                result[id] = Metadata(cwd: cwd, title: column(2),
+                                      visible: sqlite3_column_int(statement, 4) == 0 && Self.interactive(column(3)))
+            }
+            status = sqlite3_step(statement)
         }
-        return result
+        return (result, status == SQLITE_DONE)
     }
 
     private static func interactive(_ source: String?) -> Bool {
@@ -73,6 +85,37 @@ public actor CodexSessionProvider: AgentSessionProvider {
         return Metadata(cwd: cwd, title: preview, visible: true)
     }
 
+    // Codex, or the app-server daemon its clients share, keeps the rollout of every
+    // running conversation open. Resuming one of those would start a second writer.
+    private nonisolated static func runningSessions() -> Set<UUID> {
+        var pids = [pid_t](repeating: 0, count: Int(proc_listallpids(nil, 0)) + 64)
+        let count = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.stride))
+        var running: Set<UUID> = []
+        for pid in pids.prefix(max(0, Int(count))) {
+            var name = [UInt8](repeating: 0, count: 64)
+            guard proc_name(pid, &name, UInt32(name.count)) > 0,
+                  String(decoding: name.prefix { $0 != 0 }, as: UTF8.self).hasPrefix("codex") else { continue }
+            let stride = MemoryLayout<proc_fdinfo>.stride
+            let needed = Int(proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0))
+            guard needed > 0 else { continue }
+            var descriptors = [proc_fdinfo](repeating: proc_fdinfo(), count: needed / stride + 16)
+            let used = Int(proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &descriptors, Int32(descriptors.count * stride)))
+            for descriptor in descriptors.prefix(max(0, used) / stride)
+            where descriptor.proc_fdtype == UInt32(PROX_FDTYPE_VNODE) {
+                var info = vnode_fdinfowithpath()
+                guard proc_pidfdinfo(pid, descriptor.proc_fd, PROC_PIDFDVNODEPATHINFO, &info,
+                                     Int32(MemoryLayout<vnode_fdinfowithpath>.size)) > 0 else { continue }
+                let path = withUnsafeBytes(of: &info.pvip.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+                let file = URL(fileURLWithPath: path)
+                let stem = file.deletingPathExtension().lastPathComponent
+                if file.pathExtension == "jsonl", stem.hasPrefix("rollout-"), let id = UUID(uuidString: String(stem.suffix(36))) {
+                    running.insert(id)
+                }
+            }
+        }
+        return running
+    }
+
     public func listSessions() async throws -> [AgentSession] {
         let files = FileManager.default
         let directory = home.appendingPathComponent("sessions")
@@ -81,15 +124,16 @@ public actor CodexSessionProvider: AgentSessionProvider {
         guard let entries = files.enumerator(at: directory, includingPropertiesForKeys: keys,
                                              options: [.skipsHiddenFiles]) else { throw CocoaError(.fileReadNoPermission) }
         let index = indexedMetadata()
+        let running = Self.runningSessions()
         var sessions: [SessionKey: AgentSession] = [:]
         while let file = entries.nextObject() as? URL {
             try Task.checkCancellation()
             let stem = file.deletingPathExtension().lastPathComponent
             guard file.pathExtension == "jsonl", stem.hasPrefix("rollout-"),
-                  let id = UUID(uuidString: String(stem.suffix(36))),
+                  let id = UUID(uuidString: String(stem.suffix(36))), !running.contains(id),
                   let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true,
                   let modified = values.contentModificationDate,
-                  let info = index[id] ?? rolloutMetadata(file, id: id), info.visible,
+                  let info = index.rows[id] ?? (index.complete ? rolloutMetadata(file, id: id) : nil), info.visible,
                   info.cwd.hasPrefix("/"), Self.directoryExists(info.cwd) else { continue }
             let key = SessionKey(providerID: "codex", sessionID: id.uuidString)
             if let previous = sessions[key], previous.modifiedAt >= modified { continue }
@@ -107,10 +151,15 @@ public actor CodexSessionProvider: AgentSessionProvider {
     }
 
     public nonisolated func launch(for session: AgentSession) throws -> SessionLaunch {
-        guard session.id.providerID == "codex", UUID(uuidString: session.id.sessionID) != nil else {
+        guard session.id.providerID == "codex", let id = UUID(uuidString: session.id.sessionID) else {
             throw CocoaError(.fileReadCorruptFile)
         }
         guard Self.directoryExists(session.directory.path) else { throw CocoaError(.fileNoSuchFile) }
+        guard !Self.runningSessions().contains(id) else {
+            throw NSError(domain: "Seance.Codex", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "This conversation is open in another Codex process."
+            ])
+        }
         return SessionLaunch(executable: "codex", arguments: ["resume", session.id.sessionID], directory: session.directory)
     }
 }

@@ -171,6 +171,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidResignActive(_ notification: Notification) {
         runtime?.setFocus(false)
     }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard runtime?.needsConfirmQuit == true else { return .terminateNow }
+        let quit = GhosttyRuntime.confirm("Quit Seance and end its running processes?", detail: "", action: "Quit")
+        return quit ? .terminateNow : .terminateCancel
+    }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Closing the window quits the app, so let the quit path ask once.
+        NSApp.terminate(nil)
+        return false
+    }
     func applicationWillTerminate(_ notification: Notification) {
         server?.stop()
         for view in surfaces.values { view.shutdown() }
