@@ -70,7 +70,7 @@ struct SampleSidebar: View {
 
             Divider()
             Button(action: newTab) {
-                Label("New Terminal", systemImage: "plus")
+                Label("New Tab", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
                     .contentShape(Rectangle())

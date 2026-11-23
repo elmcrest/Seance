@@ -1,11 +1,14 @@
 import AppKit
 import Observation
 import SeanceCore
+import SeanceMCP
 import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let store = TabStore()
+    private let attachments = SessionAttachments()
+    private var server: TabMCPServer?
     private var runtime: GhosttyRuntime?
     private var window: NSWindow?
     private let terminalContainer = NSView()
@@ -14,8 +17,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let runtime = try GhosttyRuntime(store: store, environment: [:])
+            let server = try TabMCPServer(store: store)
+            server.onClaudeHook = { [attachments] kind, tab, session in
+                let key = SessionKey(providerID: "claude", sessionID: session.uuidString)
+                switch kind {
+                case .start: attachments.attach(key, to: tab)
+                case .end: attachments.detach(key, from: tab)
+                }
+            }
+            try server.start()
+            self.server = server
+            let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/seance")
+            let runtime = try GhosttyRuntime(store: store, environment: [
+                "SEANCE_SOCKET_PATH": server.socketPath,
+                "SEANCE_HELPER": helper.path,
+            ])
             self.runtime = runtime
+            runtime.childExited = { [attachments] id in attachments.close(id) }
             runtime.newTab = { [weak self] in self?.newTab() }
             runtime.closeTab = { [weak self] id in self?.closeTab(id) }
 
@@ -52,11 +70,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @discardableResult
-    func openTerminal(directory: URL, executable: String? = nil, arguments: [String] = []) throws -> TabID {
+    func openTerminal(
+        directory: URL, executable: String? = nil, arguments: [String] = [],
+        resuming session: SessionKey? = nil
+    ) throws -> TabID {
         guard let runtime else { throw TerminalError.initialization }
         let previous = store.selectedID
         let id = store.open(directory: directory)
         do {
+            if let session, !attachments.reserve(session, for: id) {
+                throw SessionLaunchError.alreadyAttached
+            }
             let view = try TerminalView(runtime: runtime, tab: store.tab(id), executable: executable, arguments: arguments)
             view.frame = terminalContainer.bounds
             view.autoresizingMask = [.width, .height]
@@ -65,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             focus(id)
             return id
         } catch {
+            attachments.close(id)
             try? store.close(id)
             if let previous { try? store.select(previous) }
             throw error
@@ -72,6 +97,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func newTab() {
+        guard let window else { return }
+        presentNewTabPicker(in: window, attachments: attachments, newTerminal: { [weak self] in
+            self?.newShell()
+        }, resume: { [weak self] session, launch in
+            do {
+                try self?.openTerminal(directory: launch.directory, executable: launch.executable,
+                                       arguments: launch.arguments, resuming: session.id)
+            } catch {
+                NSAlert(error: error).runModal()
+            }
+        })
+    }
+
+    private func newShell() {
         let directory = store.selectedID.flatMap { try? store.tab($0).directory } ?? FileManager.default.homeDirectoryForCurrentUser
         do { try openTerminal(directory: directory) }
         catch { NSAlert(error: error).runModal() }
@@ -83,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func closeTab(_ id: TabID) {
         guard let view = surfaces.removeValue(forKey: id) else { return }
+        attachments.close(id)
         try? store.close(id)
         view.removeFromSuperview()
         view.shutdown()
@@ -123,11 +163,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         runtime?.setFocus(false)
     }
     func applicationWillTerminate(_ notification: Notification) {
+        server?.stop()
         for view in surfaces.values { view.shutdown() }
         surfaces.removeAll()
         runtime?.shutdown()
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+}
+
+private enum SessionLaunchError: LocalizedError {
+    case alreadyAttached
+    var errorDescription: String? { "This session is already open in a Seance tab." }
 }
 
 let app = NSApplication.shared

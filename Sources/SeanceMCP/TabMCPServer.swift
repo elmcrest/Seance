@@ -12,7 +12,7 @@ public final class TabMCPServer {
     private var listener: DispatchSourceRead?
     private var clients: Set<Int32> = []
 
-    public init(store: TabStore, socketPath: String? = ProcessInfo.processInfo.environment["SEANCE_SOCKET_PATH"]) throws {
+    public init(store: TabStore, socketPath: String? = ProcessInfo.processInfo.environment["SEANCE_LISTEN_SOCKET_PATH"]) throws {
         self.store = store
         if let socketPath {
             self.socketPath = socketPath

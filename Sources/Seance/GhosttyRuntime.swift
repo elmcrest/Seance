@@ -11,6 +11,7 @@ final class GhosttyRuntime {
     private var config: ghostty_config_t?
     var newTab: () -> Void = {}
     var closeTab: (TabID) -> Void = { _ in }
+    var childExited: (TabID) -> Void = { _ in }
 
     init(store: TabStore, environment: [String: String]) throws {
         self.store = store
@@ -124,6 +125,10 @@ final class GhosttyRuntime {
             }
             guard store.tabs.indices.contains(offset) else { return false }
             try? store.select(store.tabs[offset].id)
+        case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
+            if let id = view?.id { childExited(id) }
+            // Ghostty still renders the exit status when the tab stays open.
+            return false
         case GHOSTTY_ACTION_RING_BELL: NSSound.beep()
         case GHOSTTY_ACTION_QUIT: DispatchQueue.main.async { NSApp.terminate(nil) }
         default: return false

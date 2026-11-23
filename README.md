@@ -1,12 +1,14 @@
 # Seance
 
-Seance is a macOS terminal for working with agent sessions. The foundation opens an AppKit window with two selectable sample tabs in a SwiftUI sidebar and a placeholder for the terminal surface.
+Seance is a single-window macOS terminal with a searchable tab sidebar and a picker for resuming local Claude Code conversations. AppKit hosts the terminal, SwiftUI draws the sidebar, and full libghostty owns each shell and PTY.
 
 Seance is MIT licensed. No telemetry, accounts, or upsells.
 
-## Run locally
+## Build and run
 
-Use macOS 14 or later and an Xcode toolchain with Swift 6. Run these commands from the checkout.
+Use macOS 14 or later, Xcode with Swift 6, and the Xcode Metal compiler. If Metal is missing, install it with `xcodebuild -downloadComponent MetalToolchain`. The first app build downloads the pinned Ghostty source and a checksummed Zig 0.14.1 toolchain when needed. On Apple Silicon with a recent Xcode, Zig may require an older macOS SDK. The build detects locally installed 15.4 and 14.4 SDKs, or you can supply a compatible path via `SEANCE_MACOS_SDK`.
+
+Run the following commands from the checkout.
 
 ```sh
 swift test
@@ -14,26 +16,39 @@ swift test
 open -n .build/Seance.app
 ```
 
-Open Package.swift in Xcode to develop the executable or the shared SeanceCore library. SwiftPM build products and the development app bundle live under the current worktree’s .build directory.
+The development bundle and build products live under this worktree’s .build directory. The terminal uses [Ghostty v1.2.3](https://github.com/ghostty-org/ghostty/releases/tag/v1.2.3) at commit `6d2dd585a5d87fa745d48188dd096ca6e63014d0`. It reads Ghostty’s configuration for fonts, themes, and keybindings.
+
+## Tabs and sessions
+
+Press **⌘T** and Return to open a terminal in the current tab’s last reported directory. Type to search saved Claude sessions, then choose one to run `claude --resume` in its directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Conversation previews use bounded reads from the beginning and end of transcripts.
+
+Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
+
+Quitting closes the local shells and ends their processes. A resumed conversation starts in a fresh terminal. The picker omits sessions attached to open Seance tabs. It recognizes picker launches immediately and uses Claude’s lifecycle hooks for sessions started by typing `claude`. A missed hook can leave the picker’s view of manually started sessions out of date.
+
+## Connect an agent
+
+Run either setup command **inside a Seance tab**, after placing the app where you intend to keep it.
+
+```sh
+"$SEANCE_HELPER" setup claude
+"$SEANCE_HELPER" setup codex
+```
+
+Claude setup adds a user-scoped MCP registration and merges SessionStart and SessionEnd command hooks into Claude’s settings. Codex setup registers the same tools and forwards the current tab environment at client startup. Start a new client session after setup.
+
+| MCP tool | Behavior |
+|---|---|
+| `list_tabs` | Return tabs in sidebar order, including IDs, titles, directories, and selected state. |
+| `get_current_tab` | Return the tab that launched this client, even when another tab has focus. |
+| `rename_tab` | Set the caller’s title override, or supply an explicit `tab_id`. Pass `null` as the title to clear it. |
+
+The bundled helper bridges stdio to a private Unix socket in the running app. Each surface receives its own `TAB_ID` and its app’s socket path. Codex can use the MCP tools today. The session picker currently supports Claude Code.
 
 ## Parallel development
 
-The main checkout is for integration. Start each worker in its assigned sibling directory. Each branch starts at the shared foundation commit.
+Use the main checkout for integration. The sibling worktrees are `../seance-terminal` for Ghostty and app composition, `../seance-sidebar` for tab UI, `../seance-mcp` for tools and transport, and `../seance-sessions` for session discovery and the picker. Coordinate manifest changes on main. Each running app gets its own socket by default. An explicit `SEANCE_LISTEN_SOCKET_PATH` for a test run must live inside a private directory owned by the current user.
 
-| Worktree | Branch | First deliverable |
-|---|---|---|
-| ../seance-terminal | feat/ghostty-terminal | Build full libghostty from Ghostty v1.2.3 at commit 6d2dd585a5d87fa745d48188dd096ca6e63014d0. Own the Swift wrapper, terminal view, bundling, and app composition. |
-| ../seance-sidebar | feat/sidebar | Develop the SwiftUI sidebar against TabStore. Support rename, search, close, reorder, and keyboard switching. |
-| ../seance-mcp | feat/mcp | Implement the in-process server and stdio helper for list_tabs, get_current_tab, and rename_tab. Supply one-line setup for Claude Code and Codex. |
+The integration check uses two real tabs. Focus B, emit a program title change from A, then call `rename_tab` from A. Only A should change. Clear the override to recover the latest program title. Closing A should cause late requests using its ID to fail.
 
-Coordinate package manifest changes in the main checkout. When testing concurrent MCP builds, give each app and its helper the same explicit worktree-specific socket path. For Xcode command-line builds, pass a worktree-local Derived Data path.
-
-TabStore owns ordered tab metadata and selection on the main actor. Create the tab before creating its surface and pass the UUID string as TAB_ID. Route program titles, directory changes, and agent requests by the originating tab ID. Both sidebar and MCP renames use the same sticky override. Clearing it reveals the latest program title, with the directory basename as fallback. Keep surfaces alive across sidebar selection and filtering.
-
-The first integration check uses two real tabs. Focus B, change the title from A, and verify that only A changes and its shell remains running. Repeat through MCP and reject a late request after A closes.
-
-## V1 scope
-
-The terminal will read Ghostty’s configuration for fonts, themes, and keybindings. The new-tab picker will offer a fresh terminal followed by resumable Claude Code sessions, tracked by provider and session ID. A provider interface will leave room for Codex. Agent hooks will associate manually started sessions with open tabs.
-
-Resuming reopens an agent conversation in a new terminal. Quitting ends local shells. Splits, multiple windows, notifications, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.
+Splits, multiple windows, notifications, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.

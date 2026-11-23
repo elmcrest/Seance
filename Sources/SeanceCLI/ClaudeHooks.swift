@@ -27,7 +27,9 @@ func relayClaudeHook() throws {
 /// Keep the command identical when the app moves. Each surface supplies the current helper path.
 func installClaudeHooks() throws {
     let env = ProcessInfo.processInfo.environment
-    let root = env["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let root = env["CLAUDE_CONFIG_DIR"].flatMap { value in
+        value.isEmpty ? nil : URL(fileURLWithPath: (value as NSString).expandingTildeInPath, isDirectory: true)
+    }
         ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let file = root.appendingPathComponent("settings.json").resolvingSymlinksInPath()
