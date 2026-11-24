@@ -16,7 +16,7 @@ Use your terminal paste shortcut (normally **⌘V**) to paste a copied screensho
 
 Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
 
-### Restoring agent sessions (development build)
+### Restoring agent sessions
 
 On a normal quit, Seance saves open Claude Code and Codex conversations with known session IDs. On launch it restores their sidebar order in one window and resumes the selected conversation. Selecting another row starts that agent on demand. If a directory or transcript is unavailable, or the conversation is already in use, the row stays available to retry or close. Agents exited before quitting and shell-only tabs are omitted. Claude’s hooks can identify manually started sessions. Restoration requires a known session ID.
 
