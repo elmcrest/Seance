@@ -1,0 +1,97 @@
+name: macOS build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install icon renderer
+        run: brew install resvg
+      - name: Build Apple Silicon application
+        run: |
+          test "$(uname -m)" = arm64
+          ./scripts/build-app release
+      - name: Run release tests
+        run: swift test -c release --manifest-cache none
+      - name: Package tested build
+        run: |
+          app=.build/distribution/Seance.app
+          codesign --verify --deep --strict "$app"
+          ditto -c -k --keepParent --sequesterRsrc "$app" "$RUNNER_TEMP/Seance.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Seance-macOS-arm64
+          path: ${{ runner.temp }}/Seance.zip
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Seance-macOS-arm64
+      - name: Verify release version
+        run: |
+          ditto -x -k Seance.zip .
+          version=$(plutil -extract CFBundleShortVersionString raw Seance.app/Contents/Info.plist)
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$GITHUB_REF_NAME" = "v$version"
+      - name: Sign and notarize
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          API_KEY: ${{ secrets.NOTARY_KEY_BASE64 }}
+          KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing=$(mktemp -d "$RUNNER_TEMP/signing.XXXXXX")
+          keychain="$signing/release.keychain-db"
+          trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -rf "$signing"' EXIT
+          password=$(openssl rand -hex 32)
+          security create-keychain -p "$password" "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$P12" | base64 -D > "$signing/cert.p12"
+          security import "$signing/cert.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/"Developer ID Application: .*\(JE5G244YDF\)"/ { print $2 }')
+          [[ "$identity" =~ ^[[:xdigit:]]{40}$ ]]
+          for item in Seance.app/Contents/Helpers/seance Seance.app; do
+            codesign --keychain "$keychain" --force --options runtime --timestamp --sign "$identity" "$item"
+          done
+          codesign --verify --deep --strict Seance.app
+          ditto -c -k --keepParent --sequesterRsrc Seance.app "$RUNNER_TEMP/to-notarize.zip"
+          printf '%s' "$API_KEY" | base64 -D > "$signing/key.p8"
+          xcrun notarytool submit "$RUNNER_TEMP/to-notarize.zip" --key "$signing/key.p8" --key-id "$KEY_ID" --issuer "$ISSUER" --wait --output-format json > "$signing/result.json"
+          test "$(plutil -extract status raw "$signing/result.json")" = Accepted
+          xcrun stapler staple Seance.app
+          xcrun stapler validate Seance.app
+      - name: Publish stable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="Seance-${GITHUB_REF_NAME#v}-macOS-arm64.zip"
+          ditto -c -k --keepParent --sequesterRsrc Seance.app "$archive"
+          gh release create "$GITHUB_REF_NAME" "$archive" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "Seance ${GITHUB_REF_NAME#v}"

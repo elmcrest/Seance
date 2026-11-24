@@ -129,6 +129,8 @@ app.setActivationPolicy(.regular)
 let menu = NSMenu()
 let applicationItem = menu.addItem(withTitle: "Seance", action: nil, keyEquivalent: "")
 applicationItem.submenu = NSMenu()
+let updateChecker = UpdateChecker()
+applicationItem.submenu?.addItem(withTitle: "Check for Updates…", action: #selector(UpdateChecker.check), keyEquivalent: "").target = updateChecker
 applicationItem.submenu?.addItem(withTitle: "Full Disk Access…", action: #selector(AppDelegate.reviewFullDiskAccess), keyEquivalent: "").target = delegate
 applicationItem.submenu?.addItem(.separator())
 applicationItem.submenu?.addItem(withTitle: "Quit Seance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

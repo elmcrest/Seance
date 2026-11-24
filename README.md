@@ -24,6 +24,23 @@ open -n .build/Seance.app
 
 The development bundle and build products live under this worktree’s .build directory. The terminal uses [Ghostty v1.2.3](https://github.com/ghostty-org/ghostty/releases/tag/v1.2.3) at commit `6d2dd585a5d87fa745d48188dd096ca6e63014d0`. It reads Ghostty’s configuration for fonts, themes, and keybindings.
 
+## Updates and releases
+
+Choose **Seance → Check for Updates…** to check GitHub for a newer stable download for this Mac. If one is available, **View Release** opens the release notes and ZIP in your browser. Quit Seance when you’re ready and replace the app in Applications. The check runs only when you choose the menu item and uses the public GitHub API without an account.
+
+GitHub Actions builds and tests the Apple Silicon app on pushes and pull requests. Each successful run has a downloadable CI artifact. To build the same optimized bundle locally, run `./scripts/build-app release`. The output is `.build/distribution/Seance.app`.
+
+To publish a stable release, update both version fields in `Sources/Info.plist`, commit the change, and push a tag such as `v0.3.0` matching `CFBundleShortVersionString`. The tag workflow signs the tested bundle with Developer ID, submits it for Apple notarization, staples the ticket, and publishes the ZIP to [GitHub Releases](https://github.com/elmcrest/Seance/releases).
+
+Maintainers configure these secrets in the GitHub Actions **release** environment. Branch and pull-request builds use ad hoc signing.
+
+| Secret | Value |
+|---|---|
+| `DEVELOPER_ID_P12_BASE64` | Base64-encoded Developer ID Application certificate and private key exported as a password-protected PKCS#12 file |
+| `DEVELOPER_ID_P12_PASSWORD` | Password for that export |
+| `NOTARY_KEY_BASE64` | Base64-encoded App Store Connect team API private key (.p8) for notarization |
+| `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | Key ID and issuer ID for that team API key |
+
 ## Tabs and sessions
 
 Press **⌘N** for the session picker. **⌘T** opens a horizontal terminal tab in the selected session, using the active terminal’s last reported working directory. **⌥⌘N** opens an independent window with a terminal in your home directory. **⌘W** closes the active terminal. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery reads local rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles. Conversation previews use bounded reads from the beginning and end of transcripts.

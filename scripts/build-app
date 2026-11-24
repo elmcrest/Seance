@@ -3,11 +3,16 @@ set -eu
 cd "$(dirname "$0")/.."
 signing_identity=$(git config --local --get seance.signingIdentity || true)
 signing_identity=${signing_identity:--}
+configuration=${1:-debug}
+case "$configuration" in
+    debug) app_dir="$PWD/.build/Seance.app" ;;
+    release) app_dir="$PWD/.build/distribution/Seance.app" ;;
+    *) echo "Usage: scripts/build-app [debug|release]" >&2; exit 2 ;;
+esac
 ./scripts/prepare-ghostty
-swift build --manifest-cache none --product Seance
-swift build --manifest-cache none --product SeanceCLI
-bin_dir=$(swift build --manifest-cache none --show-bin-path)
-app_dir="$PWD/.build/Seance.app"
+swift build -c "$configuration" --manifest-cache none --product Seance
+swift build -c "$configuration" --manifest-cache none --product SeanceCLI
+bin_dir=$(swift build -c "$configuration" --manifest-cache none --show-bin-path)
 mkdir -p "$app_dir/Contents/MacOS"
 cp "$bin_dir/Seance" "$app_dir/Contents/MacOS/Seance"
 mkdir -p "$app_dir/Contents/Helpers"
