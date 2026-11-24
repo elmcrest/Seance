@@ -48,6 +48,15 @@ export SEANCE_ZIG
 # The official Ghostty.app contains the identical content-addressed package.
 themes=N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y
 cache_dir=${ZIG_GLOBAL_CACHE_DIR:-"$HOME/.cache/zig"}
+# Zig's Git transport can fail against Codeberg on GitHub-hosted runners.
+# The commit archive resolves to the same package hash pinned by libvaxis.
+zg=zg-0.13.4-AAAAAGiZ7QLz4pvECFa_wG4O4TP4FLABHHbemH2KakWM
+if [ ! -d "$cache_dir/p/$zg" ]; then
+    archive="$vendor/zg.tar.gz"
+    curl -fL --retry 3 https://codeberg.org/atman/zg/archive/4a002763419a34d61dcbb1f415821b83b9bf8ddc.tar.gz -o "$archive"
+    actual=$("$SEANCE_ZIG" fetch "$archive")
+    [ "$actual" = "$zg" ] || { echo "Unexpected zg package hash" >&2; exit 1; }
+fi
 if [ ! -d "$cache_dir/p/$themes" ]; then
     image="$vendor/Ghostty-1.2.3.dmg"
     curl -fL --retry 3 https://release.files.ghostty.org/1.2.3/Ghostty.dmg -o "$image"
