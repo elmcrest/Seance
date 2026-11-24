@@ -11,7 +11,29 @@ permissions:
   contents: read
 
 jobs:
+  # A release push updates both main and its version tag atomically. Let the
+  # tag own the macOS jobs, regardless of which push event GitHub queues first.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.refs.outputs.build }}
+    steps:
+      - name: Check for a release tag on this commit
+        id: refs
+        run: |
+          build=true
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_TYPE" == branch ]]; then
+            tags=$(git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" 'refs/tags/v*')
+            if awk -v sha="$GITHUB_SHA" '$1 == sha && $2 ~ /^refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+(\^\{\})?$/ {found=1} END {exit !found}' <<< "$tags"; then
+              build=false
+              echo "The version tag owns this commit’s build and tests."
+            fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: macos-15
     timeout-minutes: 10
     env:
@@ -25,6 +47,8 @@ jobs:
         run: swift test -c release --no-parallel
 
   build:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: macos-15
     timeout-minutes: 75
     env:

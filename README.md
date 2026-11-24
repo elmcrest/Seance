@@ -28,7 +28,7 @@ The development bundle and build products live under this worktree’s .build di
 
 Choose **Seance → Check for Updates…** to check GitHub for a newer stable download for this Mac. If one is available, **View Release** opens the release notes and ZIP in your browser. Quit Seance when you’re ready and replace the app in Applications. The check runs only when you choose the menu item and uses the public GitHub API without an account.
 
-GitHub Actions builds and tests the Apple Silicon app on pushes and pull requests. Each successful run has a downloadable CI artifact. To build the same optimized bundle locally, run `./scripts/build-app release`. The output is `.build/distribution/Seance.app`.
+GitHub Actions builds and tests the Apple Silicon app on pushes and pull requests. Push the release commit and its version tag together with `git push --atomic origin main vX.Y.Z` to build and test once in the tag workflow. Successful builds have a downloadable CI artifact. To build the same optimized bundle locally, run `./scripts/build-app release`. The output is `.build/distribution/Seance.app`.
 
 To publish a stable release, update both version fields in `Sources/Info.plist`, commit the change, and push a tag such as `v0.3.0` matching `CFBundleShortVersionString`. The tag workflow signs the tested bundle with Developer ID, submits it for Apple notarization, staples the ticket, and publishes the ZIP to [GitHub Releases](https://github.com/elmcrest/Seance/releases).
 
