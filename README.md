@@ -1,85 +1,29 @@
 # Seance
 
-Seance is a macOS terminal with a searchable tab sidebar and a picker for resuming local Claude Code and Codex conversations. AppKit hosts the terminal, SwiftUI draws the sidebar, and full libghostty owns each shell and PTY.
+A macOS terminal for developers who work with Claude Code and Codex. Find a local conversation, resume it in the directory where it started, and keep a shell beside it for reviewing the diff or running tests.
 
-Seance is MIT licensed. No telemetry, accounts, or upsells.
+**[Download Seance for Apple Silicon](https://github.com/elmcrest/Seance/releases/latest)** · [Build from source](docs/guide.md#build-and-run)
 
-## Contributing
+On macOS 14 or later, unzip the release and drag Seance into Applications. Open it and press **⌘N** to find your first session.
 
-Seance is proudly built with coding agents, and this is an agent-friendly project. Pull requests are welcome, whether you write the code yourself or work with an agent. For each PR, I choose the model I consider most capable for the change and have it review the code.
+![Seance with a project selected in the sidebar and two terminal tabs open. The active terminal shows a parser fix and its passing tests.](docs/images/workspace.png)
 
-## Build and run
+## Find the conversation you remember
 
-Use macOS 14 or later, Xcode with Swift 6, and the Xcode Metal compiler. If Metal is missing, install it with `xcodebuild -downloadComponent MetalToolchain`. The first app build downloads the pinned Ghostty source and a checksummed Zig 0.14.1 toolchain when needed. On Apple Silicon with a recent Xcode, Zig may require an older macOS SDK. The build detects locally installed 15.4 and 14.4 SDKs, or you can supply a compatible path via `SEANCE_MACOS_SDK`.
+Press **⌘N** to search Claude Code and Codex sessions together by title, directory, provider, or session ID. Only remember something you typed? Choose **Search conversation contents** to search the messages on disk. Select a result and Seance runs the agent’s resume command in the project directory. When you exit the agent, you’re at a shell prompt in that same directory.
 
-The app icon build uses `resvg` for the SVG’s CRT filters. Install it with `brew install resvg` if needed.
+![The session picker searching for “parser”, with a Claude Code conversation, a Codex conversation, and the option to search message history.](docs/images/session-picker.png)
 
-Run the following commands from the checkout.
+## Work alongside the agent
 
-```sh
-swift test
-./scripts/build-app
-open -n .build/Seance.app
-```
+- **Open a shell where the work is.** Press **⌘T** for another terminal in the active terminal’s directory. **Ctrl+Tab** cycles through the window’s terminals, including those in other sidebar sessions.
+- **Keep your Ghostty setup.** Seance embeds libghostty and reads your existing fonts, themes, and keybindings.
+- **Let the agent label its work.** The optional MCP integration lets an agent name its own tab. You can also double-click a title to rename it yourself. [Connect Claude Code or Codex](docs/guide.md#connect-an-agent)
 
-The development bundle and build products live under this worktree’s .build directory. The terminal uses [Ghostty v1.2.3](https://github.com/ghostty-org/ghostty/releases/tag/v1.2.3) at commit `6d2dd585a5d87fa745d48188dd096ca6e63014d0`. It reads Ghostty’s configuration for fonts, themes, and keybindings.
+Seance has no telemetry, accounts, or upsells. Update checks run when you choose **Seance → Check for Updates…**. [Read the guide](docs/guide.md)
 
-## Updates and releases
+## Built with coding agents
 
-Choose **Seance → Check for Updates…** to check GitHub for a newer stable download for this Mac. If one is available, **View Release** opens the release notes and ZIP in your browser. Quit Seance when you’re ready and replace the app in Applications. The check runs only when you choose the menu item and uses the public GitHub API without an account.
+Seance is proudly built with coding agents. This is an agent-friendly project, and pull requests are welcome whether you write the code yourself or work with an agent. For each PR, I choose the model I consider most capable for the change and have it review the code.
 
-GitHub Actions builds and tests the Apple Silicon app on pushes and pull requests. Push the release commit and its version tag together with `git push --atomic origin main vX.Y.Z` to build and test once in the tag workflow. Successful builds have a downloadable CI artifact. To build the same optimized bundle locally, run `./scripts/build-app release`. The output is `.build/distribution/Seance.app`.
-
-To publish a stable release, update both version fields in `Sources/Info.plist`, commit the change, and push a tag such as `v0.3.0` matching `CFBundleShortVersionString`. The tag workflow signs the tested bundle with Developer ID, submits it for Apple notarization, staples the ticket, and publishes the ZIP to [GitHub Releases](https://github.com/elmcrest/Seance/releases).
-
-Maintainers configure these secrets in the GitHub Actions **release** environment. Branch and pull-request builds use ad hoc signing.
-
-| Secret | Value |
-|---|---|
-| `DEVELOPER_ID_P12_BASE64` | Base64-encoded Developer ID Application certificate and private key exported as a password-protected PKCS#12 file |
-| `DEVELOPER_ID_P12_PASSWORD` | Password for that export |
-| `NOTARY_KEY_BASE64` | Base64-encoded App Store Connect team API private key (.p8) for notarization |
-| `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | Key ID and issuer ID for that team API key |
-
-## Tabs and sessions
-
-Press **⌘N** for the session picker. **Ctrl+Tab** cycles through every terminal in the current window, visiting each sidebar session’s horizontal tabs from left to right before moving to the next session. **Ctrl+Shift+Tab** reverses the cycle. Both follow your Ghostty next/previous tab bindings. **⌘T** opens a horizontal terminal tab in the selected session, using the active terminal’s last reported working directory. **⌥⌘N** opens an independent window with a terminal in your home directory. **⌘W** closes the active terminal. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery recognizes plain and compressed rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles, working directories, and archive status. Compressed rollouts require an index entry. Conversation previews use bounded reads from the beginning and end of transcripts.
-
-In the session picker, type to filter by title, directory, provider, or session ID. Choose **Search conversation contents** at the end of the list to also search locally stored user and assistant messages. Editing the query or closing the picker cancels the scan.
-
-The sidebar identifies local foreground Claude and Codex processes, including agents started directly in a terminal. The provider artwork comes from [Orca](https://github.com/stablyai/orca/blob/d889dccbc35b3e812ab8378ab442da2450ba30c4/src/renderer/src/components/status-bar/accounts/provider-icons.tsx) under its [MIT license](Resources/AgentIcons/Orca-LICENSE).
-
-Seance plays the macOS system alert sound for Claude Code permission prompts, AskUserQuestion, and MCP requests for user input. For Codex, Seance recognizes approval, question, and plan prompts in the TUI’s terminal notifications. Delivery follows Codex’s notification and focus settings and Ghostty’s `desktop-notifications` setting.
-
-Use your terminal paste shortcut (normally **⌘V**) to paste a copied screenshot as a local PNG path. Seance removes its temporary screenshots when it quits. Copied Finder files paste as paths to the originals.
-
-Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
-
-Quitting closes the local shells and ends their processes. A resumed conversation starts in a fresh terminal. The picker omits sessions attached to open Seance tabs. It recognizes picker launches immediately and uses Claude’s lifecycle hooks for sessions started by typing `claude`. A missed hook can leave the picker’s view of manually started sessions out of date.
-
-## Connect an agent
-
-Run either setup command **inside a Seance tab**, after placing the app where you intend to keep it.
-
-```sh
-"$SEANCE_HELPER" setup claude
-"$SEANCE_HELPER" setup codex
-```
-
-Claude setup adds a user-scoped MCP registration and merges session lifecycle and input-request hooks into Claude’s settings. Re-run setup after upgrading to install the new hooks. Codex setup registers the same tools and forwards the current tab environment at client startup. Start a new client session after setup.
-
-| MCP tool | Behavior |
-|---|---|
-| `list_tabs` | Return terminal tabs across all windows, including IDs, titles, directories, and selected state. |
-| `get_current_tab` | Return the tab that launched this client, even when another tab has focus. |
-| `rename_tab` | Set the caller’s title override, or supply an explicit `tab_id`. Pass `null` as the title to clear it. |
-
-The bundled helper bridges stdio to a private Unix socket in the running app. Each surface receives its own `TAB_ID` and its app’s socket path.
-
-## Parallel development
-
-Use the main checkout for integration. The sibling worktrees are `../seance-terminal` for Ghostty and app composition, `../seance-sidebar` for tab UI, `../seance-mcp` for tools and transport, and `../seance-sessions` for session discovery and the picker. Coordinate manifest changes on main. Each running app gets its own socket by default. An explicit `SEANCE_LISTEN_SOCKET_PATH` for a test run must live inside a private directory owned by the current user.
-
-The integration check uses two real tabs. Focus B, emit a program title change from A, then call `rename_tab` from A. Only A should change. Clear the override to recover the latest program title. Closing A should cause late requests using its ID to fail.
-
-Splits, desktop notification banners, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.
+[Development guide](docs/guide.md#build-and-run) · [MIT license](LICENSE)
