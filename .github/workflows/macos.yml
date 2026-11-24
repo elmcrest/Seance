@@ -83,14 +83,18 @@ jobs:
           trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -rf "$signing"' EXIT
           password=$(openssl rand -hex 32)
           security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 7200 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
           printf '%s' "$P12" | base64 -D > "$signing/cert.p12"
           security import "$signing/cert.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          echo "Granting codesign access to the imported private key"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
           identity=$(security find-identity -v -p codesigning "$keychain" | awk '/"Developer ID Application: .*\(JE5G244YDF\)"/ { print $2 }')
           [[ "$identity" =~ ^[[:xdigit:]]{40}$ ]]
           for item in Seance.app/Contents/Helpers/seance Seance.app; do
-            codesign --keychain "$keychain" --force --options runtime --timestamp --sign "$identity" "$item"
+            echo "Signing $item"
+            codesign --force --options runtime --timestamp --sign "$identity" "$item"
           done
           codesign --verify --deep --strict Seance.app
           ditto -c -k --keepParent --sequesterRsrc Seance.app "$RUNNER_TEMP/to-notarize.zip"
