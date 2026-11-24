@@ -4,6 +4,10 @@ Seance is a macOS terminal with a searchable tab sidebar and a picker for resumi
 
 Seance is MIT licensed. No telemetry, accounts, or upsells.
 
+## Contributing
+
+Seance is proudly built with coding agents, and this is an agent-friendly project. Pull requests are welcome, whether you write the code yourself or work with an agent. For each PR, I choose the model I consider most capable for the change and have it review the code.
+
 ## Build and run
 
 Use macOS 14 or later, Xcode with Swift 6, and the Xcode Metal compiler. If Metal is missing, install it with `xcodebuild -downloadComponent MetalToolchain`. The first app build downloads the pinned Ghostty source and a checksummed Zig 0.14.1 toolchain when needed. On Apple Silicon with a recent Xcode, Zig may require an older macOS SDK. The build detects locally installed 15.4 and 14.4 SDKs, or you can supply a compatible path via `SEANCE_MACOS_SDK`.
