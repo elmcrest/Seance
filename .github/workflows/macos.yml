@@ -11,6 +11,19 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run release tests
+        timeout-minutes: 5
+        run: swift test -c release --no-parallel
+
   build:
     runs-on: macos-15
     timeout-minutes: 75
@@ -26,10 +39,7 @@ jobs:
         run: |
           test "$(uname -m)" = arm64
           ./scripts/build-app release
-      - name: Run release tests
-        timeout-minutes: 5
-        run: swift test -c release --manifest-cache none --no-parallel
-      - name: Package tested build
+      - name: Package application
         run: |
           app=.build/distribution/Seance.app
           codesign --verify --deep --strict "$app"
@@ -42,7 +52,7 @@ jobs:
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [test, build]
     runs-on: macos-15
     timeout-minutes: 60
     environment: release
