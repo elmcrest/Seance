@@ -102,3 +102,19 @@ private struct SessionFixture {
     #expect(!attachments.isAttached(otherProvider))
     #expect(attachments.reserve(key, for: a))
 }
+
+@Test func renamedClaudeSessionUsesSavedTitle() async throws {
+    let fixture = try SessionFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    let id = UUID()
+    try fixture.write(id, rows: [["type": "user", "cwd": fixture.directory.path],
+                                 ["type": "ai-title", "aiTitle": "Generated title"]])
+    let directory = fixture.project.appendingPathComponent(id.uuidString.lowercased())
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    let file = directory.appendingPathComponent("custom-title.json")
+    try JSONEncoder().encode(["customTitle": "My saved name"]).write(to: file)
+    let provider = ClaudeSessionProvider(configDirectory: fixture.root)
+    #expect(try await provider.listSessions().map(\.title) == ["My saved name"])
+    try Data("partial".utf8).write(to: file)
+    #expect(try await provider.listSessions().map(\.title) == ["Generated title"])
+}

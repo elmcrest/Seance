@@ -134,8 +134,11 @@ public actor ClaudeSessionProvider: AgentSessionProvider {
         let key = SessionKey(providerID: "claude", sessionID: uuid.uuidString)
         let indexedTitle = Self.preview(hint?["summary"] as? String)
         let prompt = firstPrompt ?? Self.preview(hint?["firstPrompt"] as? String)
-        let title = customTitle ?? generatedTitle ?? summary ?? indexedTitle ?? prompt ?? String(key.sessionID.prefix(8))
-        return AgentSession(id: key, title: title, directory: directory, modifiedAt: modified)
+        let sidecar = url.deletingPathExtension().appendingPathComponent("custom-title.json")
+        struct SavedTitle: Decodable { let customTitle: String }
+        let savedTitle = (try? Data(contentsOf: sidecar)).flatMap { try? JSONDecoder().decode(SavedTitle.self, from: $0) }
+        let title = Self.preview(savedTitle?.customTitle) ?? customTitle ?? generatedTitle ?? summary ?? indexedTitle ?? prompt ?? String(key.sessionID.prefix(8))
+        return AgentSession(id: key, title: title, directory: directory, modifiedAt: modified, transcripts: [url])
     }
 
     private static func preview(_ text: String?) -> String? {

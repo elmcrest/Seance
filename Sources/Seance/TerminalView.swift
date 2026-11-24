@@ -26,6 +26,7 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
         config.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 1)
         var environment = runtime.environment
         environment["TAB_ID"] = id.rawValue.uuidString
+        if resuming { environment["SEANCE_RESUME_DIRECTORY"] = tab.directory.path }
         var strings: [UnsafeMutablePointer<CChar>] = []
         defer { for pointer in strings { free(pointer) } }
         func copy(_ string: String) throws -> UnsafePointer<CChar> {
@@ -47,7 +48,7 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
             let command = shell.rangeOfCharacter(from: safeCharacters.inverted) == nil
                 ? shell : "'" + shell.replacingOccurrences(of: "'", with: "'\\''") + "'"
             config.command = try copy(command)
-            config.initial_input = try copy("\"$SEANCE_HELPER\" run-resume\n")
+            config.initial_input = try copy("cd -- \"$SEANCE_RESUME_DIRECTORY\"; \"$SEANCE_HELPER\" run-resume\n")
         }
         surface = variables.withUnsafeMutableBufferPointer {
             config.env_vars = $0.baseAddress

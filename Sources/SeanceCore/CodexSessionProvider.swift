@@ -85,6 +85,17 @@ public actor CodexSessionProvider: AgentSessionProvider {
         return Metadata(cwd: cwd, title: preview, visible: true)
     }
 
+    private nonisolated static func rolloutID(_ file: URL) -> UUID? {
+        let rollout = file.pathExtension == "zst" ? file.deletingPathExtension() : file
+        guard rollout.pathExtension == "jsonl" else { return nil }
+        let stem = rollout.deletingPathExtension().lastPathComponent
+        guard stem.hasPrefix("rollout-") else { return nil }
+        // A continuation appends "_<uuid>" after the original thread ID.
+        let threadPart = stem.split(separator: "_", maxSplits: 1, omittingEmptySubsequences: false)
+        guard threadPart.count == 1 || UUID(uuidString: String(threadPart[1])) != nil else { return nil }
+        return UUID(uuidString: String(threadPart[0].suffix(36)))
+    }
+
     // Codex, or the app-server daemon its clients share, keeps the rollout of every
     // running conversation open. Resuming one of those would start a second writer.
     private nonisolated static func runningSessions() -> Set<UUID> {
@@ -104,11 +115,11 @@ public actor CodexSessionProvider: AgentSessionProvider {
             where descriptor.proc_fdtype == UInt32(PROX_FDTYPE_VNODE) {
                 var info = vnode_fdinfowithpath()
                 guard proc_pidfdinfo(pid, descriptor.proc_fd, PROC_PIDFDVNODEPATHINFO, &info,
-                                     Int32(MemoryLayout<vnode_fdinfowithpath>.size)) > 0 else { continue }
+                                     Int32(MemoryLayout<vnode_fdinfowithpath>.size)) > 0,
+                      info.pfi.fi_openflags & UInt32(FWRITE) != 0 else { continue }
                 let path = withUnsafeBytes(of: &info.pvip.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
                 let file = URL(fileURLWithPath: path)
-                let stem = file.deletingPathExtension().lastPathComponent
-                if file.pathExtension == "jsonl", stem.hasPrefix("rollout-"), let id = UUID(uuidString: String(stem.suffix(36))) {
+                if let id = rolloutID(file) {
                     running.insert(id)
                 }
             }
@@ -128,19 +139,20 @@ public actor CodexSessionProvider: AgentSessionProvider {
         var sessions: [SessionKey: AgentSession] = [:]
         while let file = entries.nextObject() as? URL {
             try Task.checkCancellation()
-            let stem = file.deletingPathExtension().lastPathComponent
-            guard file.pathExtension == "jsonl", stem.hasPrefix("rollout-"),
-                  let id = UUID(uuidString: String(stem.suffix(36))), !running.contains(id),
+            guard let id = Self.rolloutID(file), !running.contains(id),
                   let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true,
                   let modified = values.contentModificationDate,
-                  let info = index.rows[id] ?? (index.complete ? rolloutMetadata(file, id: id) : nil), info.visible,
+                  let info = index.rows[id] ?? (index.complete && file.pathExtension == "jsonl" ? rolloutMetadata(file, id: id) : nil), info.visible,
                   info.cwd.hasPrefix("/"), Self.directoryExists(info.cwd) else { continue }
             let key = SessionKey(providerID: "codex", sessionID: id.uuidString)
-            if let previous = sessions[key], previous.modifiedAt >= modified { continue }
+            if let previous = sessions[key], previous.modifiedAt >= modified {
+                sessions[key]?.transcripts.append(file)
+                continue
+            }
             let line = info.title?.split(whereSeparator: \.isNewline).first?.trimmingCharacters(in: .whitespaces)
             let title = line.flatMap { $0.isEmpty ? nil : String($0.prefix(160)) } ?? String(key.sessionID.prefix(8))
             sessions[key] = AgentSession(id: key, title: title, directory: URL(fileURLWithPath: info.cwd, isDirectory: true),
-                                         modifiedAt: modified)
+                                         modifiedAt: modified, transcripts: [file] + (sessions[key]?.transcripts ?? []))
         }
         return Array(sessions.values)
     }

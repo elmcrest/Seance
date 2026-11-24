@@ -21,6 +21,9 @@ import SeanceCore
     }
 
     let cli = try rollout("cli", directory: cwd, root: sessions)
+    let basename = "rollout-2026-11-23T12-00-00-" + cli.uuidString
+    let file = sessions.appendingPathComponent(basename + "_" + UUID().uuidString + ".jsonl")
+    try files.moveItem(at: sessions.appendingPathComponent(basename + ".jsonl"), to: file)
     let ide = try rollout("vscode", directory: cwd, root: sessions)
     _ = try rollout("exec", directory: cwd, root: sessions)
     _ = try rollout(["subagent": "review"], directory: cwd, root: sessions)
@@ -64,9 +67,21 @@ import SeanceCore
     process.executableURL = codex
     let input = Pipe()
     process.standardInput = input
-    let file = sessions.appendingPathComponent("rollout-2026-11-23T12-00-00-" + cli.uuidString + ".jsonl")
     let rolloutHandle = try FileHandle(forWritingTo: file)
     defer { try? rolloutHandle.close() }
+    // Holding a transcript for reading (for example, to preview it) is not a live writer.
+    let reader = Process()
+    reader.executableURL = codex
+    let readerInput = Pipe()
+    reader.standardInput = readerInput
+    let readHandle = try FileHandle(forReadingFrom: file)
+    defer { try? readHandle.close() }
+    reader.standardError = readHandle
+    try reader.run()
+    defer { try? readerInput.fileHandleForWriting.close(); reader.waitUntilExit() }
+    #expect(try await provider.listSessions().count == 1)
+    #expect(try provider.launch(for: session).executable == "codex")
+
     process.standardOutput = rolloutHandle
     try process.run()
     defer { try? input.fileHandleForWriting.close(); process.waitUntilExit() }
@@ -82,4 +97,30 @@ import SeanceCore
 
     try files.removeItem(at: cwd)
     #expect(throws: CocoaError.self) { try provider.launch(for: session) }
+}
+
+@Test func compressedCodexRolloutsUseIndexedMetadata() async throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let sessions = home.appendingPathComponent("sessions")
+    try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let id = UUID(), archived = UUID()
+    for thread in [id, archived, UUID()] {
+        let compressed = sessions.appendingPathComponent("rollout-test-" + thread.uuidString + ".jsonl.zst")
+        try Data().write(to: compressed)
+    }
+    var db: OpaquePointer?
+    try #require(sqlite3_open(home.appendingPathComponent("state_5.sqlite").path, &db) == SQLITE_OK)
+    defer { sqlite3_close(db) }
+    let query = """
+        CREATE TABLE threads(id TEXT, cwd TEXT, title TEXT, source TEXT, archived INTEGER);
+        INSERT INTO threads VALUES ('\(id)', '/', 'Compressed conversation', 'cli', 0);
+        INSERT INTO threads VALUES ('\(archived)', '/', 'Archived conversation', 'cli', 1);
+        """
+    try #require(sqlite3_exec(db, query, nil, nil, nil) == SQLITE_OK)
+    let provider = CodexSessionProvider(home: home)
+    let listed = try await provider.listSessions()
+    #expect(listed.map(\.title) == ["Compressed conversation"])
+    let found = try #require(listed.first)
+    #expect(try provider.launch(for: found).arguments == ["resume", id.uuidString.lowercased()])
 }

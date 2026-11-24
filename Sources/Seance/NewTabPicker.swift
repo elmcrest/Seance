@@ -16,16 +16,22 @@ struct NewTabPicker: View {
     @State private var loading = true
     @State private var errorMessage: String?
 
+    @State private var requestedQuery: String?
+    @State private var contentMatches: Set<SessionKey> = []
+    @State private var searchStatus: String?
+
+    private var term: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     private enum Choice: Hashable {
         case terminal
+        case searchContents
         case session(SessionKey)
     }
 
     private var matches: [AgentSession] {
-        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return sessions.filter { session in
+        sessions.filter { session in
             !attachments.isAttached(session.id) && (
-                term.isEmpty || session.title.localizedStandardContains(term)
+                term.isEmpty || (requestedQuery == term && contentMatches.contains(session.id)) || session.title.localizedStandardContains(term)
                     || session.directory.path.localizedStandardContains(term)
                     || session.id.sessionID.localizedStandardContains(term)
                     || ProviderMark.name(for: session.id.providerID).localizedStandardContains(term)
@@ -35,7 +41,8 @@ struct NewTabPicker: View {
 
     var body: some View {
         let visible = matches
-        let choices = [.terminal] + visible.map { Choice.session($0.id) }
+        let showSearch = !term.isEmpty && !loading && requestedQuery != term
+        let choices = [.terminal] + visible.map { Choice.session($0.id) } + (showSearch ? [.searchContents] : [])
         VStack(spacing: 0) {
             PickerSearchField(query: $query, move: { offset in
                 let current = choices.firstIndex(of: selection) ?? 0
@@ -53,12 +60,16 @@ struct NewTabPicker: View {
                         ForEach(visible) { session in
                             row(.session(session.id), title: session.title, detail: session.directory.path)
                         }
+                        if showSearch {
+                            row(.searchContents, title: "Search conversation contents", detail: "Read local message history for more matches")
+                        }
                     }
                     .padding(6)
                 }
                 .onChange(of: selection) { _, current in proxy.scrollTo(current) }
             }
             if loading { ProgressView().controlSize(.small).padding(8) }
+            if let searchStatus { Text(searchStatus).font(.caption).foregroundStyle(.secondary).padding(6) }
             if let errorMessage {
                 Text(errorMessage)
                     .font(.callout)
@@ -68,10 +79,17 @@ struct NewTabPicker: View {
         }
         .frame(width: 500, height: 320)
         .onChange(of: query) { _, value in
+            requestedQuery = nil
+            contentMatches.removeAll()
+            searchStatus = nil
             selectFirstMatch(for: value)
         }
         .onChange(of: choices) { _, current in
             if !current.contains(selection) { selection = .terminal }
+        }
+        .task(id: requestedQuery) {
+            guard let requestedQuery else { return }
+            await searchContents(for: requestedQuery)
         }
         .task {
             await withTaskGroup(of: (String, Result<[AgentSession], Error>).self) { group in
@@ -98,6 +116,7 @@ struct NewTabPicker: View {
                 }
             }
             loading = false
+            if selection == .terminal { selectFirstMatch(for: query) }
         }
     }
 
@@ -105,9 +124,35 @@ struct NewTabPicker: View {
         let term = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !term.isEmpty, !"New terminal".localizedStandardContains(term), let first = matches.first {
             selection = .session(first.id)
+        } else if !loading, !term.isEmpty, !"New terminal".localizedStandardContains(term), requestedQuery == nil {
+            selection = .searchContents
         } else {
             selection = .terminal
         }
+    }
+
+    private func searchContents(for term: String) async {
+        let scanner = ConversationSearch()
+        let alreadyVisible = Set(matches.map(\.id))
+        let candidates = sessions.filter { !alreadyVisible.contains($0.id) && !attachments.isAttached($0.id) }
+        var unreadable = 0
+        for (index, session) in candidates.enumerated() {
+            guard !Task.isCancelled, requestedQuery == term else { return }
+            searchStatus = "Searching conversation contents… \(index + 1) of \(candidates.count)"
+            do {
+                let found = try await scanner.contains(term, in: session)
+                guard !Task.isCancelled, requestedQuery == term else { return }
+                if found {
+                    contentMatches.insert(session.id)
+                    if contentMatches.count == 1, selection == .terminal { selection = .session(session.id) }
+                }
+            } catch is CancellationError { return }
+            catch { unreadable += 1 }
+        }
+        guard !Task.isCancelled, requestedQuery == term else { return }
+        let count = contentMatches.count
+        searchStatus = (count == 0 ? "No additional matches." : "\(count) additional \(count == 1 ? "match" : "matches").")
+            + (unreadable == 0 ? "" : " Couldn’t fully read \(unreadable) \(unreadable == 1 ? "session" : "sessions").")
     }
 
     private func row(_ choice: Choice, title: String, detail: String?) -> some View {
@@ -116,6 +161,8 @@ struct NewTabPicker: View {
                 switch choice {
                 case .terminal:
                     Image(systemName: "terminal").foregroundStyle(.secondary).frame(width: 20)
+                case .searchContents:
+                    Image(systemName: "text.magnifyingglass").foregroundStyle(.secondary).frame(width: 20)
                 case .session(let key):
                     ProviderMark(provider: key.providerID).frame(width: 20)
                 }
@@ -147,6 +194,10 @@ struct NewTabPicker: View {
         switch choice {
         case .terminal:
             onNewTerminal()
+        case .searchContents:
+            guard !term.isEmpty, !loading, requestedQuery != term else { return }
+            requestedQuery = term
+            selection = .terminal
         case .session(let key):
             guard let session = matches.first(where: { $0.id == key }), let provider = providers[key.providerID] else { return }
             do {

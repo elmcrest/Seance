@@ -9,8 +9,9 @@ let package = Package(
         .executable(name: "SeanceCLI", targets: ["SeanceCLI"]),
         .library(name: "SeanceCore", targets: ["SeanceCore"]),
     ],
+    dependencies: [.package(url: "https://github.com/facebook/zstd.git", exact: "1.5.7")],
     targets: [
-        .target(name: "SeanceCore"),
+        .target(name: "SeanceCore", dependencies: [.product(name: "libzstd", package: "zstd")]),
         .target(name: "SeanceIPC"),
         .target(name: "SeanceMCP", dependencies: ["SeanceCore", "SeanceIPC"]),
         .executableTarget(name: "SeanceCLI", dependencies: ["SeanceIPC"]),

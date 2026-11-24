@@ -18,6 +18,11 @@ func runResume() throws {
     }
     let arguments = try JSONDecoder().decode([String].self, from: response)
     guard let executable = arguments.first else { throw IPCError.message("Missing agent command") }
+    // Still consume the reservation and report the error if the directory disappeared
+    // while the shell was starting. Never launch the agent in a substitute directory.
+    if let directory = env["SEANCE_RESUME_DIRECTORY"], chdir(directory) != 0 {
+        throw IPCError.message("Could not enter " + directory + ": " + String(cString: strerror(errno)))
+    }
     var argv = arguments.map { strdup($0) }
     defer { for pointer in argv { free(pointer) } }
     guard !argv.contains(where: { $0 == nil }) else { throw POSIXError(.ENOMEM) }

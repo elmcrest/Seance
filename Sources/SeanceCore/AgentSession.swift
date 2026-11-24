@@ -17,7 +17,10 @@ public struct AgentSession: Identifiable, Sendable {
     public let directory: URL
     public let modifiedAt: Date
 
-    public init(id: SessionKey, title: String, directory: URL, modifiedAt: Date) {
+    var transcripts: [URL]
+
+    public init(id: SessionKey, title: String, directory: URL, modifiedAt: Date, transcripts: [URL] = []) {
+        self.transcripts = transcripts
         self.id = id
         self.title = title
         self.directory = directory

@@ -129,14 +129,15 @@ func resumeReleasesSessionWithoutClosingTab(agentInstalled: Bool) async throws {
     defer { server.stop() }
 
     let literal = "a quote ' and a space; $HOME"
-    let launch = SessionLaunch(executable: agentInstalled ? "/usr/bin/printf" : "/nonexistent/seance-test-agent",
-                               arguments: ["%s", literal], directory: directory)
+    let launch = SessionLaunch(executable: agentInstalled ? "/bin/sh" : "/nonexistent/seance-test-agent",
+                               arguments: ["-c", #"test . -ef "$2" && printf '%s' "$1""#, "sh", literal, directory.path], directory: directory)
     var finished = false
     server.prepareResume(launch, in: tab) { finished = true }
 
     let helper = Bundle(for: TestBundleAnchor.self).bundleURL.deletingLastPathComponent()
         .appendingPathComponent("SeanceCLI")
-    let environment = ["TAB_ID": tab.rawValue.uuidString, "SEANCE_SOCKET_PATH": server.socketPath]
+    let environment = ["TAB_ID": tab.rawValue.uuidString, "SEANCE_SOCKET_PATH": server.socketPath,
+                       "SEANCE_RESUME_DIRECTORY": directory.path]
     let (status, output) = try await Task.detached {
         let process = Process()
         let pipe = Pipe()
