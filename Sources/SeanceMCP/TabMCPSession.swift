@@ -78,7 +78,7 @@ final class TabMCPSession {
     }
 
     private static let tools: [Object] = [
-        tool("list_tabs", "List open tabs in sidebar order."),
+        tool("list_tabs", "List open terminal tabs across all windows."),
         tool("get_current_tab", "Get the tab that launched this agent."),
         tool("rename_tab", "Rename a tab. Omit tab_id for the calling tab. Pass null to clear the override.",
              properties: ["tab_id": ["type": "string", "format": "uuid"], "title": ["type": ["string", "null"]]],

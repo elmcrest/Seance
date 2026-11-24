@@ -41,8 +41,13 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
         return sessions.firstIndex { $0.tabs.contains(id) }
     }
 
+    func shortcutLabel(forPosition position: Int) -> String? {
+        runtime.tabShortcutLabel(position: position)
+    }
+
     var selectedRoot: TabID? { index(of: visibleID).flatMap { sessions[$0].tabs.first } }
     var roots: Set<TabID> { Set(sessions.compactMap { $0.tabs.first }) }
+    func root(of id: TabID) -> TabID? { index(of: id).flatMap { sessions[$0].tabs.first } }
     var horizontalTabs: [TabID] { index(of: visibleID).map { sessions[$0].tabs } ?? [] }
 
     init(runtime: GhosttyRuntime, server: TabMCPServer, attachments: SessionAttachments) {
@@ -60,10 +65,12 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
         split.addSplitViewItem(item)
         let content = NSViewController()
         let strip = NSHostingView(rootView: HorizontalTabBar(workspace: self))
+        strip.sizingOptions = [.intrinsicContentSize]
         let stack = NSStackView(views: [strip, container])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .width
+        strip.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         strip.setContentHuggingPriority(.required, for: .vertical)
         strip.setContentCompressionResistancePriority(.required, for: .vertical)
         content.view = stack
@@ -185,6 +192,16 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
         let orderedRoots = store.tabs.map(\.id).filter(roots.contains)
         let rootPosition = orderedRoots.firstIndex(of: sessions[i].tabs[0]) ?? 0
         let wasVisible = visibleID == id
+        if position == 0, sessions[i].tabs.count > 1 {
+            // The sidebar shows a session through its first tab. Hand the session's
+            // name and sidebar position to the tab that takes over.
+            let successor = sessions[i].tabs[1]
+            if let name = try? store.tab(id).titleOverride { try? store.rename(successor, to: name) }
+            let order = store.tabs.map(\.id)
+            if let old = order.firstIndex(of: id), let new = order.firstIndex(of: successor) {
+                try? store.reorderVisibleTabs(old < new ? [successor, id] : [id, successor])
+            }
+        }
         discard(id)
         sessions[i].tabs.remove(at: position)
         let removedSession = sessions[i].tabs.isEmpty
@@ -251,27 +268,110 @@ private struct HorizontalTabBar: View {
     var body: some View {
         let tabs = workspace.horizontalTabs
         if tabs.count > 1 {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    HStack(spacing: 4) {
-                        ForEach(tabs, id: \.self) { id in
-                            if let tab = try? workspace.store.tab(id) {
-                                Button(tab.title) { workspace.focus(id) }
-                                    .buttonStyle(.bordered)
-                                    .tint(id == workspace.visibleID ? .accentColor : .secondary)
-                                    .accessibilityAddTraits(id == workspace.visibleID ? .isSelected : [])
-                                    .help(tab.directory.path)
-                                    .id(id)
+            HStack(spacing: 0) {
+                GeometryReader { geometry in
+                    let width = max(110, geometry.size.width / CGFloat(tabs.count))
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 0) {
+                                ForEach(Array(tabs.enumerated()), id: \.element) { index, id in
+                                    if let tab = try? workspace.store.tab(id) {
+                                        TerminalTabItem(tab: tab, shortcut: workspace.shortcutLabel(forPosition: index + 1),
+                                                        selected: id == workspace.visibleID,
+                                                        select: { workspace.focus(id) },
+                                                        close: { workspace.surfaces[id]?.requestClose() })
+                                            .frame(width: width)
+                                            .id(id)
+                                    }
+                                }
                             }
                         }
-                    }.padding(4)
+                        .scrollIndicators(.hidden)
+                        .onChange(of: workspace.visibleID, initial: true) { _, id in
+                            if let id { proxy.scrollTo(id) }
+                        }
+                        .onChange(of: geometry.size.width) {
+                            if let id = workspace.visibleID { proxy.scrollTo(id) }
+                        }
+                    }
                 }
-                .scrollIndicators(.hidden)
-                .fixedSize(horizontal: false, vertical: true)
-                .onChange(of: workspace.visibleID, initial: true) { _, id in
-                    if let id { proxy.scrollTo(id) }
+                Divider()
+                Button { workspace.newHorizontalTab() } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 32, height: 28)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Tab")
+                .help("New Tab (⌘T)")
+            }
+            .frame(height: 28)
+            .background(.bar)
+            .overlay(alignment: .bottom) { Divider().allowsHitTesting(false) }
+        }
+    }
+}
+
+private struct TerminalTabItem: View {
+    let tab: SeanceCore.Tab
+    let shortcut: String?
+    let selected: Bool
+    let select: () -> Void
+    let close: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Button(action: select) {
+                HStack(spacing: 0) {
+                    Text(tab.title)
+                        .font(.system(size: 12, weight: selected ? .medium : .regular))
+                        .foregroundStyle(selected ? .primary : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.leading, 26)
+                        .padding(.trailing, 5)
+                        .frame(maxWidth: .infinity)
+                    if let shortcut {
+                        Text(shortcut)
+                            .font(.system(size: 10).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                            .padding(.trailing, 7)
+                    }
+                }
+                .frame(height: 28)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(tab.title)
+            .accessibilityHint(shortcut ?? "")
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .help(tab.title + "\n" + tab.directory.path)
+
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 20, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 3)
+            .opacity(hovered || selected ? 1 : 0)
+            .allowsHitTesting(hovered || selected)
+            .accessibilityLabel("Close " + tab.title)
+        }
+        .background {
+            if selected {
+                Color(nsColor: .controlBackgroundColor)
+            } else {
+                Color.primary.opacity(hovered ? 0.06 : 0.025)
             }
         }
+        .overlay(alignment: .trailing) {
+            Divider().frame(height: 16).allowsHitTesting(false)
+        }
+        .onHover { hovered = $0 }
     }
 }

@@ -82,7 +82,8 @@ final class GhosttyRuntime {
             // Teardown must run after the call into libghostty returns.
             DispatchQueue.main.async { [weak view] in
                 guard let view, view.surface != nil else { return }
-                if !alive || GhosttyRuntime.confirm("Close this tab and its running process?", detail: "") {
+                let title = (try? view.runtime.store.tab(view.id).title) ?? "this tab"
+                if !alive || GhosttyRuntime.confirm("Close “\(title)” and its running process?", detail: "", action: "Close") {
                     view.runtime.closeTab(view.id)
                 }
             }
@@ -94,6 +95,42 @@ final class GhosttyRuntime {
         }
         self.app = app
         ghostty_app_set_focus(app, NSApp.isActive)
+    }
+
+    func tabShortcutLabel(position: Int) -> String? {
+        guard (1...9).contains(position), let config else { return nil }
+        let action = "goto_tab:\(position)"
+        let trigger = ghostty_config_trigger(config, action, UInt(action.utf8.count))
+        let key: String
+        switch trigger.tag {
+        case GHOSTTY_TRIGGER_UNICODE:
+            guard let scalar = Unicode.Scalar(trigger.key.unicode),
+                  !CharacterSet.controlCharacters.contains(scalar) else { return nil }
+            key = scalar == " " ? "Space" : String(scalar).uppercased()
+        case GHOSTTY_TRIGGER_PHYSICAL:
+            let physical = trigger.key.physical
+            switch physical {
+            case GHOSTTY_KEY_ARROW_LEFT: key = "←"
+            case GHOSTTY_KEY_ARROW_RIGHT: key = "→"
+            case GHOSTTY_KEY_ARROW_UP: key = "↑"
+            case GHOSTTY_KEY_ARROW_DOWN: key = "↓"
+            case GHOSTTY_KEY_TAB: key = "⇥"
+            case GHOSTTY_KEY_ENTER: key = "↩"
+            case GHOSTTY_KEY_ESCAPE: key = "⎋"
+            default:
+                let code = physical.rawValue
+                guard (GHOSTTY_KEY_F1.rawValue...GHOSTTY_KEY_F25.rawValue).contains(code) else { return nil }
+                key = "F\(code - GHOSTTY_KEY_F1.rawValue + 1)"
+            }
+        default: return nil
+        }
+        let modifiers = trigger.mods.rawValue
+        var label = ""
+        for (flag, symbol) in [(GHOSTTY_MODS_CTRL, "⌃"), (GHOSTTY_MODS_ALT, "⌥"),
+                               (GHOSTTY_MODS_SHIFT, "⇧"), (GHOSTTY_MODS_SUPER, "⌘")] {
+            if modifiers & flag.rawValue != 0 { label += symbol }
+        }
+        return label + key
     }
 
     func setFocus(_ focused: Bool) {

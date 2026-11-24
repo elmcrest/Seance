@@ -12,8 +12,9 @@ struct SampleSidebar: View {
     @FocusState private var renameFocused: Bool
 
     var body: some View {
-        let roots = workspace.roots
-        let visible = store.tabs(matching: query).filter { roots.contains($0.id) }
+        // A session matches when any of its tabs does.
+        let matching = Set(store.tabs(matching: query).compactMap { workspace.root(of: $0.id) })
+        let visible = store.tabs.filter { matching.contains($0.id) }
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
@@ -85,7 +86,7 @@ struct SampleSidebar: View {
     @ViewBuilder private func row(for tab: SeanceCore.Tab) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             if editingID == tab.id {
-                TextField("Tab title", text: $draft)
+                TextField("Session title", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($renameFocused)
                     .onSubmit { finishRename() }

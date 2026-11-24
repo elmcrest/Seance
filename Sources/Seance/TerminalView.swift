@@ -77,7 +77,8 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
     override var acceptsFirstResponder: Bool { true }
 
     override func becomeFirstResponder() -> Bool {
-        if let surface { ghostty_surface_set_focus(surface, true) }
+        // A background window gains terminal focus when it becomes key.
+        if let surface, window?.isKeyWindow == true { ghostty_surface_set_focus(surface, true) }
         return true
     }
 

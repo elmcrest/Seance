@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [TerminalWindow] = []
 
     private var active: TerminalWindow? {
-        windows.first { $0.window === NSApp.keyWindow || $0.window === NSApp.mainWindow }
+        windows.first { $0.window === NSApp.keyWindow || $0.window === NSApp.mainWindow } ?? windows.last
     }
 
     private func owner(of id: TabID?) -> TerminalWindow? {
@@ -66,8 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             throw error
         }
         if let previous = active {
-            controller.window.setFrameTopLeftPoint(NSPoint(x: previous.window.frame.minX + 24,
-                                                          y: previous.window.frame.maxY - 24))
+            var frame = controller.window.frame
+            frame.origin = NSPoint(x: previous.window.frame.minX + 24,
+                                   y: previous.window.frame.maxY - 24 - frame.height)
+            // Start again from the screen's top left once the cascade would leave it.
+            if let screen = previous.window.screen?.visibleFrame, !screen.contains(frame) {
+                frame.origin = NSPoint(x: screen.minX, y: screen.maxY - frame.height)
+            }
+            controller.window.setFrameOrigin(frame.origin)
         } else {
             controller.window.center()
         }
@@ -81,8 +87,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         catch { NSAlert(error: error).runModal() }
     }
     @objc func newSession() { active?.newSession() }
-    @objc func newTab() { active?.newHorizontalTab() }
-    @objc func closeCurrentTab() { active?.closeCurrentTab() }
+    // A sheet leaves these menu shortcuts live; they must not act on the window beneath it.
+    @objc func newTab() {
+        if let active, active.window.attachedSheet == nil { active.newHorizontalTab() }
+    }
+    @objc func closeCurrentTab() {
+        if let active, active.window.attachedSheet == nil { active.closeCurrentTab() }
+    }
     @objc func reviewFullDiskAccess() {
         if let window = active?.window { FullDiskAccess.present(in: window) }
     }
