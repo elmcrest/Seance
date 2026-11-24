@@ -1,6 +1,6 @@
 # Seance
 
-Seance is a single-window macOS terminal with a searchable tab sidebar and a picker for resuming local Claude Code and Codex conversations. AppKit hosts the terminal, SwiftUI draws the sidebar, and full libghostty owns each shell and PTY.
+Seance is a macOS terminal with a searchable tab sidebar and a picker for resuming local Claude Code and Codex conversations. AppKit hosts the terminal, SwiftUI draws the sidebar, and full libghostty owns each shell and PTY.
 
 Seance is MIT licensed. No telemetry, accounts, or upsells.
 
@@ -22,7 +22,7 @@ The development bundle and build products live under this worktree’s .build di
 
 ## Tabs and sessions
 
-Press **⌘T** and Return to open a terminal in the current tab’s last reported directory. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery reads local rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles. Conversation previews use bounded reads from the beginning and end of transcripts.
+Press **⌘N** for the session picker. **⌘T** opens a horizontal terminal tab in the selected session, using the active terminal’s last reported working directory. **⌥⌘N** opens an independent window with a terminal in your home directory. **⌘W** closes the active terminal. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery reads local rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles. Conversation previews use bounded reads from the beginning and end of transcripts.
 
 Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
 
@@ -41,7 +41,7 @@ Claude setup adds a user-scoped MCP registration and merges SessionStart and Ses
 
 | MCP tool | Behavior |
 |---|---|
-| `list_tabs` | Return tabs in sidebar order, including IDs, titles, directories, and selected state. |
+| `list_tabs` | Return terminal tabs across all windows, including IDs, titles, directories, and selected state. |
 | `get_current_tab` | Return the tab that launched this client, even when another tab has focus. |
 | `rename_tab` | Set the caller’s title override, or supply an explicit `tab_id`. Pass `null` as the title to clear it. |
 
@@ -53,4 +53,4 @@ Use the main checkout for integration. The sibling worktrees are `../seance-term
 
 The integration check uses two real tabs. Focus B, emit a program title change from A, then call `rename_tab` from A. Only A should change. Clear the override to recover the latest program title. Closing A should cause late requests using its ID to fail.
 
-Splits, multiple windows, notifications, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.
+Splits, notifications, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.

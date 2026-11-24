@@ -11,7 +11,7 @@ func presentNewTabPicker(
 ) {
     guard window.attachedSheet == nil else { return }
     let panel = NSPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
-    panel.title = "New Tab"
+    panel.title = "New Session"
     func dismiss() {
         window.endSheet(panel)
     }

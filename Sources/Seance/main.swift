@@ -1,19 +1,23 @@
 import AppKit
-import Observation
 import SeanceCore
 import SeanceMCP
-import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = TabStore()
     private let attachments = SessionAttachments()
     private var server: TabMCPServer?
     private var runtime: GhosttyRuntime?
-    private var window: NSWindow?
-    private let terminalContainer = NSView()
-    private var surfaces: [TabID: TerminalView] = [:]
-    private var visibleID: TabID?
+    private var windows: [TerminalWindow] = []
+
+    private var active: TerminalWindow? {
+        windows.first { $0.window === NSApp.keyWindow || $0.window === NSApp.mainWindow }
+    }
+
+    private func owner(of id: TabID?) -> TerminalWindow? {
+        guard let id else { return active }
+        return windows.first { $0.surfaces[id] != nil }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -34,137 +38,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             ])
             self.runtime = runtime
             runtime.childExited = { [attachments] id in attachments.close(id) }
-            runtime.newTab = { [weak self] in self?.newTab() }
-            runtime.closeTab = { [weak self] id in self?.closeTab(id) }
-
-            let split = NSSplitViewController()
-            let sidebar = SampleSidebar(
-                store: store, attachments: attachments,
-                onNewTab: { [weak self] in self?.newTab() },
-                onCloseTab: { [weak self] id in self?.surfaces[id]?.requestClose() },
-                onActivateTab: { [weak self] id in self?.focus(id) }
-            )
-            let item = NSSplitViewItem(sidebarWithViewController: NSHostingController(rootView: sidebar))
-            item.minimumThickness = 150
-            item.maximumThickness = 380
-            split.addSplitViewItem(item)
-            let content = NSViewController()
-            content.view = terminalContainer
-            split.addSplitViewItem(.init(viewController: content))
-
-            let window = NSWindow(contentViewController: split)
-            window.title = "Seance"
-            window.setContentSize(.init(width: 920, height: 590))
-            window.center()
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            self.window = window
-            window.makeKeyAndOrderFront(nil)
-            _ = try openTerminal(directory: FileManager.default.homeDirectoryForCurrentUser)
-            observeSelection()
+            runtime.newTab = { [weak self] id in self?.owner(of: id)?.newHorizontalTab(from: id) }
+            runtime.newWindow = { [weak self] in self?.newWindow() }
+            runtime.goToTab = { [weak self] id, destination in
+                self?.owner(of: id)?.goToTab(from: id, destination: destination) ?? false
+            }
+            runtime.closeTab = { [weak self] id in self?.owner(of: id)?.closeTab(id) }
+            let first = try createWindow()
             NSApp.activate(ignoringOtherApps: true)
-            FullDiskAccess.present(in: window, atLaunch: true)
+            FullDiskAccess.present(in: first.window, atLaunch: true)
         } catch {
             NSAlert(error: error).runModal()
             NSApp.terminate(nil)
         }
     }
 
-    @discardableResult
-    func openTerminal(
-        directory: URL, resume: (session: SessionKey, launch: SessionLaunch)? = nil
-    ) throws -> TabID {
-        guard let runtime else { throw TerminalError.initialization }
-        let previous = store.selectedID
-        let id = store.open(directory: directory)
+    private func createWindow() throws -> TerminalWindow {
+        guard let server, let runtime else { throw TerminalError.initialization }
+        let controller = TerminalWindow(runtime: runtime, server: server, attachments: attachments)
+        controller.onClose = { [weak self, weak controller] in
+            self?.windows.removeAll { $0 === controller }
+        }
         do {
-            if let resume {
-                guard let server else { throw TerminalError.initialization }
-                guard attachments.reserve(resume.session, for: id) else { throw SessionLaunchError.alreadyAttached }
-                server.prepareResume(resume.launch, in: id) { [attachments] in
-                    attachments.detach(resume.session, from: id)
-                }
-            }
-            let view = try TerminalView(runtime: runtime, tab: store.tab(id), resuming: resume != nil)
-            view.frame = terminalContainer.bounds
-            view.autoresizingMask = [.width, .height]
-            surfaces[id] = view
-            terminalContainer.addSubview(view)
-            focus(id)
-            return id
+            try controller.openTerminal(directory: FileManager.default.homeDirectoryForCurrentUser)
         } catch {
-            server?.forgetResume(in: id)
-            attachments.close(id)
-            try? store.close(id)
-            if let previous { try? store.select(previous) }
+            controller.shutdown()
             throw error
         }
+        if let previous = active {
+            controller.window.setFrameTopLeftPoint(NSPoint(x: previous.window.frame.minX + 24,
+                                                          y: previous.window.frame.maxY - 24))
+        } else {
+            controller.window.center()
+        }
+        windows.append(controller)
+        controller.window.makeKeyAndOrderFront(nil)
+        return controller
     }
 
-    @objc func newTab() {
-        guard let window else { return }
-        presentNewTabPicker(in: window, attachments: attachments, newTerminal: { [weak self] in
-            self?.newShell()
-        }, resume: { [weak self] session, launch in
-            do {
-                try self?.openTerminal(directory: launch.directory, resume: (session.id, launch))
-            } catch {
-                NSAlert(error: error).runModal()
-            }
-        })
-    }
-
-    private func newShell() {
-        let directory = store.selectedID.flatMap { try? store.tab($0).directory } ?? FileManager.default.homeDirectoryForCurrentUser
-        do { try openTerminal(directory: directory) }
+    @objc func newWindow() {
+        do { _ = try createWindow() }
         catch { NSAlert(error: error).runModal() }
     }
-
+    @objc func newSession() { active?.newSession() }
+    @objc func newTab() { active?.newHorizontalTab() }
+    @objc func closeCurrentTab() { active?.closeCurrentTab() }
     @objc func reviewFullDiskAccess() {
-        if let window { FullDiskAccess.present(in: window) }
+        if let window = active?.window { FullDiskAccess.present(in: window) }
     }
 
-    @objc func closeCurrentTab() {
-        if let id = store.selectedID { surfaces[id]?.requestClose() }
-    }
-
-    private func closeTab(_ id: TabID) {
-        guard let view = surfaces.removeValue(forKey: id) else { return }
-        server?.forgetResume(in: id)
-        attachments.close(id)
-        try? store.close(id)
-        view.removeFromSuperview()
-        view.shutdown()
-        if let next = store.selectedID {
-            if visibleID == id { focus(next) }
-        } else {
-            window?.close()
-        }
-    }
-
-    private func observeSelection() {
-        withObservationTracking {
-            _ = store.selectedID
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if let id = self.store.selectedID, id != self.visibleID { self.focus(id) }
-                self.observeSelection()
-            }
-        }
-    }
-
-    private func focus(_ id: TabID) {
-        guard let view = surfaces[id] else { return }
-        if let previous = visibleID, previous != id { surfaces[previous]?.show(false) }
-        view.show(true)
-        visibleID = id
-        window?.makeFirstResponder(view)
-    }
-
-    func windowDidChangeScreen(_ notification: Notification) {
-        for view in surfaces.values { view.updateGeometry() }
-    }
     func applicationDidBecomeActive(_ notification: Notification) {
         runtime?.setFocus(true)
     }
@@ -176,21 +98,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let quit = GhosttyRuntime.confirm("Quit Seance and end its running processes?", detail: "", action: "Quit")
         return quit ? .terminateNow : .terminateCancel
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        // Closing the window quits the app, so let the quit path ask once.
-        NSApp.terminate(nil)
-        return false
-    }
     func applicationWillTerminate(_ notification: Notification) {
+        for controller in windows { controller.shutdown() }
         server?.stop()
-        for view in surfaces.values { view.shutdown() }
-        surfaces.removeAll()
         runtime?.shutdown()
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
-private enum SessionLaunchError: LocalizedError {
+enum SessionLaunchError: LocalizedError {
     case alreadyAttached
     var errorDescription: String? { "This session is already open in a Seance tab." }
 }
@@ -206,6 +122,10 @@ applicationItem.submenu?.addItem(withTitle: "Full Disk Access…", action: #sele
 applicationItem.submenu?.addItem(.separator())
 applicationItem.submenu?.addItem(withTitle: "Quit Seance", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 let tabMenu = NSMenu(title: "Tab")
+tabMenu.addItem(withTitle: "New Session…", action: #selector(AppDelegate.newSession), keyEquivalent: "n").target = delegate
+let newWindow = tabMenu.addItem(withTitle: "New Window", action: #selector(AppDelegate.newWindow), keyEquivalent: "n")
+newWindow.keyEquivalentModifierMask = [.option, .command]
+newWindow.target = delegate
 tabMenu.addItem(withTitle: "New Tab", action: #selector(AppDelegate.newTab), keyEquivalent: "t").target = delegate
 tabMenu.addItem(withTitle: "Close Tab", action: #selector(AppDelegate.closeCurrentTab), keyEquivalent: "w").target = delegate
 menu.addItem(withTitle: "Tab", action: nil, keyEquivalent: "").submenu = tabMenu

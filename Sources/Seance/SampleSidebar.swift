@@ -2,11 +2,8 @@ import SeanceCore
 import SwiftUI
 
 struct SampleSidebar: View {
-    let store: TabStore
-    let attachments: SessionAttachments
-    var onNewTab: (() -> Void)? = nil
-    var onCloseTab: ((TabID) -> Void)? = nil
-    var onActivateTab: ((TabID) -> Void)? = nil
+    let workspace: TerminalWindow
+    private var store: TabStore { workspace.store }
 
     @State private var query = ""
     @State private var editingID: TabID?
@@ -15,13 +12,14 @@ struct SampleSidebar: View {
     @FocusState private var renameFocused: Bool
 
     var body: some View {
-        let visible = store.tabs(matching: query)
+        let roots = workspace.roots
+        let visible = store.tabs(matching: query).filter { roots.contains($0.id) }
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("Filter tabs", text: $query)
+                TextField("Filter sessions", text: $query)
                     .textFieldStyle(.plain)
                 if !query.isEmpty {
                     Button { query = "" } label: {
@@ -36,11 +34,10 @@ struct SampleSidebar: View {
             .padding(8)
 
             List(selection: Binding(
-                get: { store.selectedID },
+                get: { workspace.selectedRoot },
                 set: { id in
                     guard let id, editingID != id else { return }
-                    try? store.select(id)
-                    onActivateTab?(id)
+                    workspace.selectSession(id)
                 }
             )) {
                 ForEach(visible) { tab in
@@ -57,7 +54,7 @@ struct SampleSidebar: View {
             .contextMenu(forSelectionType: TabID.self) { selection in
                 if let id = selection.first, let tab = try? store.tab(id) {
                     Button("Rename…") { beginRename(tab) }
-                    Button("Close Tab") { close(id) }
+                    Button("Close Session") { close(id) }
                 }
             } primaryAction: { selection in
                 guard let id = selection.first, let tab = try? store.tab(id) else { return }
@@ -65,13 +62,13 @@ struct SampleSidebar: View {
             }
             .overlay {
                 if visible.isEmpty && !query.isEmpty {
-                    Text("No matching tabs").foregroundStyle(.secondary)
+                    Text("No matching sessions").foregroundStyle(.secondary)
                 }
             }
 
             Divider()
             Button(action: newTab) {
-                Label("New Tab", systemImage: "plus")
+                Label("New Session", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
                     .contentShape(Rectangle())
@@ -96,7 +93,7 @@ struct SampleSidebar: View {
                     .onAppear { renameFocused = true }
             } else {
                 HStack(spacing: 5) {
-                    ForEach(attachments.providers(in: tab.id), id: \.self) { provider in
+                    ForEach(workspace.providers(inSession: tab.id), id: \.self) { provider in
                         ProviderMark(provider: provider)
                     }
                     Text(tab.title).lineLimit(1)
@@ -133,20 +130,11 @@ struct SampleSidebar: View {
     private func newTab() {
         finishRename()
         query = ""
-        if let onNewTab {
-            onNewTab()
-        } else {
-            let selected = store.selectedID.flatMap { try? store.tab($0) }
-            store.open(directory: selected?.directory ?? FileManager.default.homeDirectoryForCurrentUser)
-        }
+        workspace.newSession()
     }
 
     private func close(_ id: TabID) {
         if editingID == id { editingID = nil }
-        if let onCloseTab {
-            onCloseTab(id)
-        } else {
-            try? store.close(id)
-        }
+        workspace.closeSession(id)
     }
 }

@@ -11,7 +11,9 @@ final class GhosttyRuntime {
     private(set) var app: ghostty_app_t?
     private(set) var waitAfterCommand = false
     private var config: ghostty_config_t?
-    var newTab: () -> Void = {}
+    var newTab: (TabID?) -> Void = { _ in }
+    var newWindow: () -> Void = {}
+    var goToTab: (TabID?, ghostty_action_goto_tab_e) -> Bool = { _, _ in false }
     var closeTab: (TabID) -> Void = { _ in }
     var childExited: (TabID) -> Void = { _ in }
 
@@ -129,24 +131,15 @@ final class GhosttyRuntime {
             let directory = String(cString: path)
             if directory.hasPrefix("/") { try? store.updateDirectory(URL(fileURLWithPath: directory), for: id) }
         case GHOSTTY_ACTION_NEW_TAB:
-            DispatchQueue.main.async { self.newTab() }
+            let id = view?.id
+            DispatchQueue.main.async { self.newTab(id) }
+        case GHOSTTY_ACTION_NEW_WINDOW:
+            DispatchQueue.main.async { self.newWindow() }
         case GHOSTTY_ACTION_CLOSE_TAB:
             guard action.action.close_tab_mode == GHOSTTY_ACTION_CLOSE_TAB_MODE_THIS, let view else { return false }
             DispatchQueue.main.async { [weak view] in view?.requestClose() }
         case GHOSTTY_ACTION_GOTO_TAB:
-            guard let id = view?.id ?? store.selectedID,
-                  let index = store.tabs.firstIndex(where: { $0.id == id }) else { return false }
-            let count = store.tabs.count
-            let destination = action.action.goto_tab
-            let offset: Int
-            switch destination {
-            case GHOSTTY_GOTO_TAB_PREVIOUS: offset = (index + count - 1) % count
-            case GHOSTTY_GOTO_TAB_NEXT: offset = (index + 1) % count
-            case GHOSTTY_GOTO_TAB_LAST: offset = count - 1
-            default: offset = Int(destination.rawValue) - 1
-            }
-            guard store.tabs.indices.contains(offset) else { return false }
-            try? store.select(store.tabs[offset].id)
+            return goToTab(view?.id, action.action.goto_tab)
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             if let view {
                 childExited(view.id)
