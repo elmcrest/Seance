@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var server: TabMCPServer?
     private var runtime: GhosttyRuntime?
     private var agentMonitor: Task<Void, Never>?
+    private var workspaceFile: AgentWorkspaceFile?
+    private var lastClosedWorkspace: AgentWorkspace?
     private var windows: [TerminalWindow] = []
 
     private var active: TerminalWindow? {
@@ -61,7 +63,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.owner(of: id)?.goToTab(from: id, destination: destination) ?? false
             }
             runtime.closeTab = { [weak self] id in self?.owner(of: id)?.closeTab(id) }
-            let first = try createWindow()
+            var saved: AgentWorkspace?
+            do {
+                let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                          appropriateFor: nil, create: true)
+                #if DEBUG
+                let folder = "Seance/Development/Agent Workspaces"
+                #else
+                let folder = "Seance/Agent Workspaces"
+                #endif
+                let file = try AgentWorkspaceFile(directory: support.appendingPathComponent(folder))
+                saved = try file.load()
+                workspaceFile = file
+            } catch {
+                NSAlert(error: error).runModal()
+            }
+            let first = try createWindow(restoring: saved)
             NSApp.activate(ignoringOtherApps: true)
             FullDiskAccess.present(in: first.window, atLaunch: true)
         } catch {
@@ -70,14 +87,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func createWindow() throws -> TerminalWindow {
+    private func createWindow(restoring workspace: AgentWorkspace? = nil) throws -> TerminalWindow {
         guard let server, let runtime else { throw TerminalError.initialization }
         let controller = TerminalWindow(runtime: runtime, server: server, attachments: attachments)
         controller.onClose = { [weak self, weak controller] in
-            self?.windows.removeAll { $0 === controller }
+            guard let self, let controller else { return }
+            if self.windows.count == 1 { self.lastClosedWorkspace = self.currentWorkspace() }
+            self.windows.removeAll { $0 === controller }
         }
         do {
-            try controller.openTerminal(directory: FileManager.default.homeDirectoryForCurrentUser)
+            if let workspace, !workspace.agents.isEmpty {
+                controller.restore(workspace)
+            } else {
+                try controller.openTerminal(directory: FileManager.default.homeDirectoryForCurrentUser)
+            }
         } catch {
             controller.shutdown()
             throw error
@@ -94,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             controller.window.center()
         }
+        lastClosedWorkspace = nil
         windows.append(controller)
         controller.window.makeKeyAndOrderFront(nil)
         return controller
@@ -122,10 +146,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runtime?.setFocus(false)
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard runtime?.needsConfirmQuit == true else { return .terminateNow }
-        let quit = GhosttyRuntime.confirm("Quit Seance and end its running processes?", detail: "", action: "Quit")
-        return quit ? .terminateNow : .terminateCancel
+        if runtime?.needsConfirmQuit == true,
+           !GhosttyRuntime.confirm("Quit Seance and end its running processes?", detail: "", action: "Quit") {
+            return .terminateCancel
+        }
+        do {
+            try workspaceFile?.save(lastClosedWorkspace ?? currentWorkspace())
+        } catch {
+            return GhosttyRuntime.confirm("Quit without saving open conversations?", detail: error.localizedDescription,
+                                          action: "Quit") ? .terminateNow : .terminateCancel
+        }
+        return .terminateNow
     }
+
+    private func currentWorkspace() -> AgentWorkspace {
+        let front = active
+        var agents: [SavedAgent] = []
+        var selected: SessionKey?
+        for controller in windows {
+            let snapshot = controller.savedAgents()
+            agents += snapshot.agents
+            if controller === front { selected = snapshot.selected }
+        }
+        return AgentWorkspace(agents: agents, selected: selected)
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         agentMonitor?.cancel()
         for controller in windows { controller.shutdown() }

@@ -30,7 +30,7 @@ struct NewTabPicker: View {
 
     private var matches: [AgentSession] {
         sessions.filter { session in
-            !attachments.isAttached(session.id) && (
+            !attachments.hasRow(for: session.id) && (
                 term.isEmpty || (requestedQuery == term && contentMatches.contains(session.id)) || session.title.localizedStandardContains(term)
                     || session.directory.path.localizedStandardContains(term)
                     || session.id.sessionID.localizedStandardContains(term)
@@ -134,7 +134,7 @@ struct NewTabPicker: View {
     private func searchContents(for term: String) async {
         let scanner = ConversationSearch()
         let alreadyVisible = Set(matches.map(\.id))
-        let candidates = sessions.filter { !alreadyVisible.contains($0.id) && !attachments.isAttached($0.id) }
+        let candidates = sessions.filter { !alreadyVisible.contains($0.id) && !attachments.hasRow(for: $0.id) }
         var unreadable = 0
         for (index, session) in candidates.enumerated() {
             guard !Task.isCancelled, requestedQuery == term else { return }

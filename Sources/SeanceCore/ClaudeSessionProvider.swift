@@ -56,6 +56,21 @@ public actor ClaudeSessionProvider: AgentSessionProvider {
             throw CocoaError(.fileReadCorruptFile)
         }
         guard Self.directoryExists(session.directory) else { throw CocoaError(.fileNoSuchFile) }
+        let registry = projectsDirectory.deletingLastPathComponent().appendingPathComponent("sessions")
+        let entries = (try? FileManager.default.contentsOfDirectory(at: registry, includingPropertiesForKeys: nil)) ?? []
+        struct LiveSession: Decodable { let pid: Int32; let sessionId: UUID; let startedAt: Double? }
+        for entry in entries where entry.pathExtension == "json" {
+            guard let pid = Int32(entry.deletingPathExtension().lastPathComponent), pid > 0,
+                  let data = try? Data(contentsOf: entry), let record = try? JSONDecoder().decode(LiveSession.self, from: data),
+                  record.pid == pid, record.sessionId.uuidString.lowercased() == session.id.sessionID else { continue }
+            var info = proc_bsdinfo()
+            guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout.size(ofValue: info))) > 0,
+                  info.pbi_status != UInt32(SZOMB),
+                  record.startedAt.map({ Double(info.pbi_start_tvsec) <= $0 / 1000 }) ?? true else { continue }
+            throw NSError(domain: "Seance.Claude", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "This conversation is open in another Claude Code process."
+            ])
+        }
         return SessionLaunch(executable: "claude", arguments: ["--resume", session.id.sessionID], directory: session.directory)
     }
 

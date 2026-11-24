@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-public struct SessionKey: Hashable, Sendable {
+public struct SessionKey: Codable, Hashable, Sendable {
     public let providerID: String
     public let sessionID: String
 
@@ -77,6 +77,18 @@ public final class SessionAttachments {
         if clientsByTab[tab]?.isEmpty == true { clientsByTab.removeValue(forKey: tab) }
     }
 
+    private var deferred: [TabID: SessionKey] = [:]
+
+    public func deferResume(_ key: SessionKey?, in tab: TabID) { deferred[tab] = key }
+
+    public func hasRow(for key: SessionKey) -> Bool { isAttached(key) || deferred.values.contains(key) }
+
+    public func attachedKeys(in tab: TabID) -> [SessionKey] {
+        tabsBySession.compactMap { $0.value.contains(tab) ? $0.key : nil }.sorted {
+            ($0.providerID, $0.sessionID) < ($1.providerID, $1.sessionID)
+        }
+    }
+
     public func isAttached(_ key: SessionKey) -> Bool {
         tabsBySession[key] != nil
     }
@@ -99,6 +111,7 @@ public final class SessionAttachments {
     }
 
     public func close(_ tab: TabID) {
+        deferred.removeValue(forKey: tab)
         foreground.removeValue(forKey: tab)
         clientsByTab.removeValue(forKey: tab)
         for key in tabsBySession.keys {

@@ -32,6 +32,9 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
     private let server: TabMCPServer
     private let container = NSView()
     private(set) var surfaces: [TabID: TerminalView] = [:]
+    private var pending: [TabID: SavedAgent] = [:]
+    private var restoreTask: Task<Void, Never>?
+    private var restorePanel: NSHostingView<RestoreMessage>?
     private var sessions: [Session] = []
     private(set) var visibleID: TabID?
     var onClose: () -> Void = {}
@@ -92,15 +95,7 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
         let previous = store.selectedID
         let id = store.open(directory: directory)
         do {
-            if let (key, launch) = resume {
-                guard attachments.reserve(key, for: id) else { throw SessionLaunchError.alreadyAttached }
-                server.prepareResume(launch, in: id) { [attachments] in attachments.detach(key, from: id) }
-            }
-            let view = try TerminalView(runtime: runtime, tab: store.tab(id), resuming: resume != nil)
-            surfaces[id] = view
-            view.frame = container.bounds
-            view.autoresizingMask = [.width, .height]
-            container.addSubview(view)
+            try createSurface(id, resume: resume)
             if let i = index(of: parent) {
                 sessions[i].tabs.append(id)
             } else {
@@ -114,6 +109,94 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
             try? store.close(id)
             if let previous { try? store.select(previous) }
             throw error
+        }
+    }
+
+    private func createSurface(_ id: TabID, resume: (SessionKey, SessionLaunch)?) throws {
+        if let (key, launch) = resume {
+            guard attachments.reserve(key, for: id) else { throw SessionLaunchError.alreadyAttached }
+            server.prepareResume(launch, in: id) { [attachments] in attachments.detach(key, from: id) }
+        }
+        let view = try TerminalView(runtime: runtime, tab: store.tab(id), resuming: resume != nil)
+        surfaces[id] = view
+        view.frame = container.bounds
+        view.autoresizingMask = [.width, .height]
+        container.addSubview(view)
+    }
+
+    func savedAgents() -> (agents: [SavedAgent], selected: SessionKey?) {
+        var agents: [SavedAgent] = []
+        var selected: SessionKey?
+        let windowRoots = roots
+        for root in store.tabs where windowRoots.contains(root.id) {
+            guard let i = index(of: root.id) else { continue }
+            for id in sessions[i].tabs {
+                guard let tab = try? store.tab(id) else { continue }
+                let keys = pending[id].map { [$0.key] } ?? attachments.attachedKeys(in: id)
+                agents += keys.map { SavedAgent(key: $0, tab: tab) }
+                if id == visibleID { selected = keys.first }
+            }
+        }
+        return (agents, selected)
+    }
+
+    func restore(_ workspace: AgentWorkspace) {
+        var selection: TabID?
+        for agent in workspace.agents {
+            let id = store.open(directory: agent.directory)
+            pending[id] = agent
+            attachments.deferResume(agent.key, in: id)
+            try? store.updateProgramTitle(agent.title, for: id)
+            try? store.rename(id, to: agent.titleOverride)
+            sessions.append(Session(tabs: [id], selected: id))
+            if agent.key == workspace.selected { selection = id }
+        }
+        if let selection { focus(selection) }
+    }
+
+    private func showRestoreMessage(_ text: String, retry: (() -> Void)? = nil) {
+        restorePanel?.removeFromSuperview()
+        let panel = NSHostingView(rootView: RestoreMessage(text: text, retry: retry))
+        panel.frame = container.bounds
+        panel.autoresizingMask = [.width, .height]
+        container.addSubview(panel)
+        restorePanel = panel
+    }
+
+    private func startRestore(_ agent: SavedAgent, in id: TabID) {
+        showRestoreMessage("Opening conversation…")
+        restoreTask = Task { [weak self] in
+            let provider: any AgentSessionProvider = agent.key.providerID == "claude"
+                ? ClaudeSessionProvider() : CodexSessionProvider()
+            do {
+                var directory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: agent.directory.path, isDirectory: &directory), directory.boolValue
+                else { throw RestoreError.missingDirectory(agent.directory.path) }
+                let saved = AgentSession(id: agent.key, title: agent.title, directory: agent.directory, modifiedAt: .distantPast)
+                // A running Codex session is deliberately absent from discovery. Check it first
+                // so that we can explain that case, then recheck at launch after the async scan.
+                _ = try provider.launch(for: saved)
+                let available = try await provider.listSessions()
+                try Task.checkCancellation()
+                guard let self, self.visibleID == id, self.pending[id] != nil else { return }
+                guard !self.attachments.isAttached(agent.key) else { throw SessionLaunchError.alreadyAttached }
+                guard let session = available.first(where: { $0.id == agent.key }) else { throw RestoreError.unavailable }
+                let launch = try provider.launch(for: session)
+                try self.store.updateDirectory(launch.directory, for: id)
+                do {
+                    try self.createSurface(id, resume: (agent.key, launch))
+                } catch {
+                    self.server.forgetResume(in: id)
+                    self.attachments.detach(agent.key, from: id)
+                    throw error
+                }
+                self.pending[id] = nil
+                self.attachments.deferResume(nil, in: id)
+                self.focus(id)
+            } catch {
+                guard !Task.isCancelled, let self, self.visibleID == id, self.pending[id] != nil else { return }
+                self.showRestoreMessage(error.localizedDescription) { [weak self] in self?.focus(id) }
+            }
         }
     }
 
@@ -137,7 +220,9 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
 
     func providers(inSession root: TabID) -> [String] {
         guard let i = index(of: root) else { return [] }
-        return Set(sessions[i].tabs.flatMap { attachments.providers(in: $0) }).sorted()
+        var providers = Set(sessions[i].tabs.flatMap { attachments.providers(in: $0) })
+        providers.formUnion(sessions[i].tabs.compactMap { pending[$0]?.key.providerID })
+        return providers.sorted()
     }
 
     func selectSession(_ root: TabID) {
@@ -145,13 +230,21 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
     }
 
     func focus(_ id: TabID) {
-        guard let view = surfaces[id], let i = index(of: id) else { return }
+        guard let i = index(of: id) else { return }
+        restoreTask?.cancel()
+        restorePanel?.removeFromSuperview()
+        restorePanel = nil
         if let previous = visibleID, previous != id { surfaces[previous]?.show(false) }
         sessions[i].selected = id
         visibleID = id
         if window.isKeyWindow || window.isMainWindow { try? store.select(id) }
-        view.show(true)
-        window.makeFirstResponder(view)
+        if let view = surfaces[id] {
+            view.show(true)
+            window.makeFirstResponder(view)
+        } else if let agent = pending[id] {
+            window.makeFirstResponder(nil)
+            startRestore(agent, in: id)
+        }
     }
 
     func goToTab(from id: TabID?, destination: ghostty_action_goto_tab_e) -> Bool {
@@ -173,7 +266,11 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
     }
 
     func closeCurrentTab() {
-        if let id = visibleID { surfaces[id]?.requestClose() }
+        if let visibleID { requestClose(visibleID) }
+    }
+
+    func requestClose(_ id: TabID) {
+        if let view = surfaces[id] { view.requestClose() } else { closeTab(id) }
     }
 
     private func confirmClose(_ ids: [TabID], action: String) -> Bool {
@@ -223,6 +320,7 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
     }
 
     private func discard(_ id: TabID) {
+        pending[id] = nil
         server.forgetResume(in: id)
         attachments.close(id)
         try? store.close(id)
@@ -232,7 +330,10 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
     }
 
     func shutdown() {
-        for id in Array(surfaces.keys) { discard(id) }
+        restoreTask?.cancel()
+        restorePanel?.removeFromSuperview()
+        restorePanel = nil
+        for id in sessions.flatMap(\.tabs) { discard(id) }
         sessions.removeAll()
         visibleID = nil
         onClose = {}
@@ -257,9 +358,8 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
         confirmClose(Array(surfaces.keys), action: "Close this window")
     }
     func windowWillClose(_ notification: Notification) {
-        let notify = onClose
+        onClose()
         shutdown()
-        notify()
     }
 }
 
@@ -280,7 +380,7 @@ private struct HorizontalTabBar: View {
                                         TerminalTabItem(tab: tab, shortcut: workspace.shortcutLabel(forPosition: index + 1),
                                                         selected: id == workspace.visibleID,
                                                         select: { workspace.focus(id) },
-                                                        close: { workspace.surfaces[id]?.requestClose() })
+                                                        close: { workspace.requestClose(id) })
                                             .frame(width: width)
                                             .id(id)
                                     }
@@ -374,5 +474,30 @@ private struct TerminalTabItem: View {
             Divider().frame(height: 16).allowsHitTesting(false)
         }
         .onHover { hovered = $0 }
+    }
+}
+
+private struct RestoreMessage: View {
+    let text: String
+    let retry: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text(text).multilineTextAlignment(.center)
+            if let retry { Button("Retry", action: retry) } else { ProgressView().controlSize(.small) }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private enum RestoreError: LocalizedError {
+    case missingDirectory(String)
+    case unavailable
+    var errorDescription: String? {
+        switch self {
+        case .missingDirectory(let path): "The session’s working directory is unavailable: " + path
+        case .unavailable: "This conversation could not be found in the agent’s local session history."
+        }
     }
 }
