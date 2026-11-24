@@ -6,8 +6,10 @@ import SeanceMCP
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = TabStore()
     private let attachments = SessionAttachments()
+    private let attention = AgentAttention()
     private var server: TabMCPServer?
     private var runtime: GhosttyRuntime?
+    private var agentMonitor: Task<Void, Never>?
     private var windows: [TerminalWindow] = []
 
     private var active: TerminalWindow? {
@@ -22,11 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             let server = try TabMCPServer(store: store, attachments: attachments)
-            server.onClaudeHook = { [attachments] kind, tab, session in
+            server.onClaudeHook = { [attachments, attention] kind, tab, session in
                 let key = SessionKey(providerID: "claude", sessionID: session.uuidString)
                 switch kind {
                 case .start: attachments.attach(key, to: tab)
                 case .end: attachments.detach(key, from: tab)
+                case .permission, .question, .elicitation:
+                    if attention.shouldPlay(for: tab) { NSSound.beep() }
                 }
             }
             try server.start()
@@ -37,6 +41,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "SEANCE_HELPER": helper.path,
             ])
             self.runtime = runtime
+            agentMonitor = Task.detached(priority: .utility) { [attachments] in
+                while !Task.isCancelled {
+                    let snapshot = ForegroundAgents.snapshot(parent: getpid())
+                    await attachments.updateForeground(snapshot)
+                    try? await Task.sleep(for: .seconds(2))
+                }
+            }
+            runtime.desktopNotification = { [attachments, attention] tab, title, body in
+                guard AgentAttention.isCodexPrompt(title: title, body: body, providers: attachments.providers(in: tab))
+                else { return false }
+                if attention.shouldPlay(for: tab) { NSSound.beep() }
+                return true
+            }
             runtime.childExited = { [attachments] id in attachments.close(id) }
             runtime.newTab = { [weak self] id in self?.owner(of: id)?.newHorizontalTab(from: id) }
             runtime.newWindow = { [weak self] in self?.newWindow() }
@@ -110,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return quit ? .terminateNow : .terminateCancel
     }
     func applicationWillTerminate(_ notification: Notification) {
+        agentMonitor?.cancel()
         for controller in windows { controller.shutdown() }
         server?.stop()
         runtime?.shutdown()

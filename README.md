@@ -43,9 +43,15 @@ Maintainers configure these secrets in the GitHub Actions **release** environmen
 
 ## Tabs and sessions
 
-Press **⌘N** for the session picker. **⌘T** opens a horizontal terminal tab in the selected session, using the active terminal’s last reported working directory. **⌥⌘N** opens an independent window with a terminal in your home directory. **⌘W** closes the active terminal. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery recognizes plain and compressed rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles, working directories, and archive status. Compressed rollouts require an index entry. Conversation previews use bounded reads from the beginning and end of transcripts.
+Press **⌘N** for the session picker. **Ctrl+Tab** cycles through every terminal in the current window, visiting each sidebar session’s horizontal tabs from left to right before moving to the next session. **Ctrl+Shift+Tab** reverses the cycle. Both follow your Ghostty next/previous tab bindings. **⌘T** opens a horizontal terminal tab in the selected session, using the active terminal’s last reported working directory. **⌥⌘N** opens an independent window with a terminal in your home directory. **⌘W** closes the active terminal. Search by title, directory, or provider. Choosing a session runs `claude --resume <id>` or `codex resume <id>` in its recorded directory. When the agent exits, the same tab returns to an interactive shell in that directory. Discovery reads local Claude metadata, including projects under `CLAUDE_CONFIG_DIR` when set. It skips missing directories and malformed records. Codex discovery recognizes plain and compressed rollout files under `CODEX_HOME/sessions` (default `~/.codex/sessions`) and uses its local thread index for titles, working directories, and archive status. Compressed rollouts require an index entry. Conversation previews use bounded reads from the beginning and end of transcripts.
 
 In the session picker, type to filter by title, directory, provider, or session ID. Choose **Search conversation contents** at the end of the list to also search locally stored user and assistant messages. Editing the query or closing the picker cancels the scan.
+
+The sidebar identifies local foreground Claude and Codex processes, including agents started directly in a terminal. The provider artwork comes from [Orca](https://github.com/stablyai/orca/blob/d889dccbc35b3e812ab8378ab442da2450ba30c4/src/renderer/src/components/status-bar/accounts/provider-icons.tsx) under its [MIT license](Resources/AgentIcons/Orca-LICENSE).
+
+Seance plays the macOS system alert sound for Claude Code permission prompts, AskUserQuestion, and MCP requests for user input. For Codex, Seance recognizes approval, question, and plan prompts in the TUI’s terminal notifications. Delivery follows Codex’s notification and focus settings and Ghostty’s `desktop-notifications` setting.
+
+Use your terminal paste shortcut (normally **⌘V**) to paste a copied screenshot as a local PNG path. Seance removes its temporary screenshots when it quits. Copied Finder files paste as paths to the originals.
 
 Filter the sidebar by title or directory, drag to reorder, and double-click a tab to rename it. Manual and MCP renames share a sticky title override. Clear the name to follow the program title again. While an override is active, the program title can still appear below it.
 
@@ -60,7 +66,7 @@ Run either setup command **inside a Seance tab**, after placing the app where yo
 "$SEANCE_HELPER" setup codex
 ```
 
-Claude setup adds a user-scoped MCP registration and merges SessionStart and SessionEnd command hooks into Claude’s settings. Codex setup registers the same tools and forwards the current tab environment at client startup. Start a new client session after setup.
+Claude setup adds a user-scoped MCP registration and merges session lifecycle and input-request hooks into Claude’s settings. Re-run setup after upgrading to install the new hooks. Codex setup registers the same tools and forwards the current tab environment at client startup. Start a new client session after setup.
 
 | MCP tool | Behavior |
 |---|---|
@@ -76,4 +82,4 @@ Use the main checkout for integration. The sibling worktrees are `../seance-term
 
 The integration check uses two real tabs. Focus B, emit a program title change from A, then call `rename_tab` from A. Only A should change. Clear the override to recover the latest program title. Closing A should cause late requests using its ID to fail.
 
-Splits, notifications, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.
+Splits, desktop notification banners, a browser, scrollback search, layout restoration, a settings window, and automatic updates are outside v1.

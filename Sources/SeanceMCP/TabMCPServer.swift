@@ -60,6 +60,7 @@ public final class TabMCPServer {
     // SessionEnd never arrives when the agent crashes or is killed. Observe the
     // process that ran the hook so its exit also frees the session.
     private func observeClaudeHook(_ kind: ClaudeHookKind, tab: TabID, session: UUID, helper: pid_t) {
+        guard kind == .start || kind == .end else { return }
         let key = HookedSession(tab: tab, session: session)
         hookProcesses.removeValue(forKey: key)?.cancel()
         guard kind == .start, let agent = Self.agentProcess(above: helper) else { return }

@@ -218,8 +218,12 @@ final class TerminalView: NSView, @preconcurrency NSTextInputClient {
         return bound
     }
 
+    private(set) var handlingKeyDown = false
+
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
+        handlingKeyDown = true
+        defer { handlingKeyDown = false }
         var key = keyEvent(event, action: event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS)
         var translation = event
         let mods = ghostty_surface_key_translation_mods(surface, key.mods)

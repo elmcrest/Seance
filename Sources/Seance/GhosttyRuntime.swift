@@ -7,6 +7,7 @@ import SeanceCore
 final class GhosttyRuntime {
     let store: TabStore
     let environment: [String: String]
+    private let clipboard = TerminalClipboard()
     let pasteboard: NSPasteboard
     private(set) var app: ghostty_app_t?
     private(set) var waitAfterCommand = false
@@ -15,6 +16,7 @@ final class GhosttyRuntime {
     var newWindow: () -> Void = {}
     var goToTab: (TabID?, ghostty_action_goto_tab_e) -> Bool = { _, _ in false }
     var closeTab: (TabID) -> Void = { _ in }
+    var desktopNotification: (TabID, String, String) -> Bool = { _, _, _ in false }
     var childExited: (TabID) -> Void = { _ in }
 
     init(store: TabStore, environment: [String: String], pasteboard: NSPasteboard = .general) throws {
@@ -42,7 +44,17 @@ final class GhosttyRuntime {
         }
         runtime.read_clipboard_cb = { pointer, location, state in
             guard let view = TerminalView.from(pointer), let surface = view.surface else { return }
-            let text = location == GHOSTTY_CLIPBOARD_STANDARD ? view.runtime.pasteboard.string(forType: .string) : nil
+            var text: String?
+            if location == GHOSTTY_CLIPBOARD_STANDARD {
+                let board = view.runtime.pasteboard
+                if view.handlingKeyDown {
+                    do { text = try view.runtime.clipboard.text(for: board) }
+                    catch { NSSound.beep() }
+                } else {
+                    // Programmatic reads (OSC 52) only receive text, subject to Ghostty's permission handling.
+                    text = board.string(forType: .string)
+                }
+            }
             ghostty_surface_complete_clipboard_request(surface, text ?? "", state, false)
         }
         runtime.confirm_read_clipboard_cb = { pointer, value, state, request in
@@ -138,6 +150,7 @@ final class GhosttyRuntime {
     }
 
     func shutdown() {
+        clipboard.cleanUp()
         if let app { self.app = nil; ghostty_app_free(app) }
         if let config { self.config = nil; ghostty_config_free(config) }
     }
@@ -189,6 +202,11 @@ final class GhosttyRuntime {
             }
             // Ghostty still renders the exit status when the tab stays open.
             return false
+        case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+            guard let view else { return false }
+            let notification = action.action.desktop_notification
+            return desktopNotification(view.id, notification.title.map(String.init(cString:)) ?? "",
+                                       notification.body.map(String.init(cString:)) ?? "")
         case GHOSTTY_ACTION_RING_BELL: NSSound.beep()
         case GHOSTTY_ACTION_QUIT: DispatchQueue.main.async { NSApp.terminate(nil) }
         default: return false

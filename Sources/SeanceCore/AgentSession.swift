@@ -53,10 +53,17 @@ public final class SessionAttachments {
 
     public init() {}
 
+    private var foreground: [TabID: String] = [:]
+
+    public func updateForeground(_ current: [TabID: String]) {
+        if foreground != current { foreground = current }
+    }
+
     public func providers(in tab: TabID) -> [String] {
         var providers = Set(tabsBySession.compactMap { key, tabs in
             tabs.contains(tab) ? key.providerID : nil
         })
+        if let provider = foreground[tab] { providers.insert(provider) }
         if let clients = clientsByTab[tab] { providers.formUnion(clients.values) }
         return providers.sorted()
     }
@@ -92,6 +99,7 @@ public final class SessionAttachments {
     }
 
     public func close(_ tab: TabID) {
+        foreground.removeValue(forKey: tab)
         clientsByTab.removeValue(forKey: tab)
         for key in tabsBySession.keys {
             detach(key, from: tab)

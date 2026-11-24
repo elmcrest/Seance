@@ -3,6 +3,9 @@ import Foundation
 public enum ClaudeHookKind: String, Codable, Sendable {
     case start = "SessionStart"
     case end = "SessionEnd"
+    case permission = "PermissionRequest"
+    case question = "PreToolUse"
+    case elicitation = "Elicitation"
 }
 
 package struct ClaudeHook: Codable, Sendable {

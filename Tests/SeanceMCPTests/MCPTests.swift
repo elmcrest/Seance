@@ -184,7 +184,11 @@ func resumeReleasesSessionWithoutClosingTab(agentInstalled: Bool) async throws {
     #expect(attachments.providers(in: tab) == ["claude", "codex"])
     attachments.detach(claude, from: tab)
     #expect(attachments.providers(in: tab) == ["codex"])
+    attachments.updateForeground([tab: "codex"])
     second.disconnect()
+    #expect(attachments.providers(in: tab) == ["codex"])
+    #expect(attachments.providers(in: focused).isEmpty)
+    attachments.updateForeground([:])
     #expect(attachments.providers(in: tab).isEmpty)
 }
 

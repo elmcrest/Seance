@@ -5,6 +5,7 @@ import SeanceIPC
 private struct ClaudeHookInput: Decodable {
     let hook_event_name: ClaudeHookKind
     let session_id: UUID
+    let tool_name: String?
 }
 
 func relayClaudeHook() throws {
@@ -13,6 +14,7 @@ func relayClaudeHook() throws {
           let tabID = env["TAB_ID"].flatMap(UUID.init(uuidString:)) else { return }
     let input = FileHandle.standardInput.readDataToEndOfFile()
     let event = try JSONDecoder().decode(ClaudeHookInput.self, from: input)
+    if event.hook_event_name == .question && event.tool_name != "AskUserQuestion" { return }
     let payload = ClaudeHook(kind: event.hook_event_name, sessionID: event.session_id, tabID: tabID)
     let fd = try LocalSocket.open(path: path, listening: false)
     defer { Darwin.close(fd) }
@@ -45,16 +47,19 @@ func installClaudeHooks() throws {
         throw IPCError.message("Expected an object in Claude settings.hooks")
     }
     var changed = false
-    for kind in [ClaudeHookKind.start, .end] {
+    for kind in [ClaudeHookKind.start, .end, .permission, .question, .elicitation] {
+        let matcher: String? = kind == .question ? "AskUserQuestion" : nil
         guard var groups = (hooks[kind.rawValue] ?? []) as? [[String: Any]] else {
             throw IPCError.message("Expected an array in Claude hooks." + kind.rawValue)
         }
         let registered = groups.contains { group in
             let handlers = group["hooks"] as? [[String: Any]] ?? []
-            return group["matcher"] == nil && handlers.contains { $0["command"] as? String == command }
+            return group["matcher"] as? String == matcher && handlers.contains { $0["command"] as? String == command }
         }
         if !registered {
-            groups.append(["hooks": [["type": "command", "command": command]]])
+            var group: [String: Any] = ["hooks": [["type": "command", "command": command]]]
+            group["matcher"] = matcher
+            groups.append(group)
             hooks[kind.rawValue] = groups
             changed = true
         }

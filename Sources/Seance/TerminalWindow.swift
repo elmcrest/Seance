@@ -156,16 +156,17 @@ final class TerminalWindow: NSObject, NSWindowDelegate {
 
     func goToTab(from id: TabID?, destination: ghostty_action_goto_tab_e) -> Bool {
         guard let current = id ?? visibleID, let session = index(of: current) else { return false }
+        if destination == GHOSTTY_GOTO_TAB_NEXT || destination == GHOSTTY_GOTO_TAB_PREVIOUS {
+            let tabsByRoot = Dictionary(uniqueKeysWithValues: sessions.map { ($0.tabs[0], $0.tabs) })
+            let cycle = store.tabs.compactMap { tabsByRoot[$0.id] }.flatMap { $0 }
+            guard let i = cycle.firstIndex(of: current) else { return false }
+            let offset = destination == GHOSTTY_GOTO_TAB_NEXT ? 1 : cycle.count - 1
+            focus(cycle[(i + offset) % cycle.count])
+            return true
+        }
         let siblings = sessions[session].tabs
         let ids = siblings.count > 1 ? siblings : store.tabs.map(\.id).filter(roots.contains)
-        guard let i = ids.firstIndex(of: current) else { return false }
-        let next: Int
-        switch destination {
-        case GHOSTTY_GOTO_TAB_PREVIOUS: next = (i + ids.count - 1) % ids.count
-        case GHOSTTY_GOTO_TAB_NEXT: next = (i + 1) % ids.count
-        case GHOSTTY_GOTO_TAB_LAST: next = ids.count - 1
-        default: next = Int(destination.rawValue) - 1
-        }
+        let next = destination == GHOSTTY_GOTO_TAB_LAST ? ids.count - 1 : Int(destination.rawValue) - 1
         guard ids.indices.contains(next) else { return false }
         if siblings.count > 1 { focus(ids[next]) } else { selectSession(ids[next]) }
         return true

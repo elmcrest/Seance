@@ -24,9 +24,10 @@ private final class BundleMarker: NSObject {}
     let helper = Bundle(for: BundleMarker.self).bundleURL.deletingLastPathComponent()
         .appendingPathComponent("SeanceCLI")
     let environment = ["SEANCE_SOCKET_PATH": server.socketPath, "TAB_ID": origin.rawValue.uuidString]
-    for event in ["SessionStart", "SessionEnd"] {
+    for (event, tool) in [("SessionStart", ""), ("PreToolUse", "Bash"), ("PermissionRequest", "Bash"),
+                          ("PreToolUse", "AskUserQuestion"), ("Elicitation", ""), ("SessionEnd", "")] {
         let payload = try JSONSerialization.data(withJSONObject: [
-            "hook_event_name": event, "session_id": sessionID.uuidString,
+            "hook_event_name": event, "session_id": sessionID.uuidString, "tool_name": tool,
             "transcript_path": "/tmp/transcript.jsonl",
         ])
         let status = try await Task.detached {
@@ -44,7 +45,7 @@ private final class BundleMarker: NSObject {}
         }.value
         #expect(status == 0)
     }
-    #expect(events == ["SessionStart", "SessionEnd"])
+    #expect(events == ["SessionStart", "PermissionRequest", "PreToolUse", "Elicitation", "SessionEnd"])
     #expect(store.selectedID == focused)
 }
 
