@@ -27,7 +27,8 @@ jobs:
           test "$(uname -m)" = arm64
           ./scripts/build-app release
       - name: Run release tests
-        run: swift test -c release --manifest-cache none
+        timeout-minutes: 5
+        run: swift test -c release --manifest-cache none --no-parallel
       - name: Package tested build
         run: |
           app=.build/distribution/Seance.app
